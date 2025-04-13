@@ -1,6 +1,16 @@
 #!/bin/bash
 echo "🚀 Deploying application..."
 
+# Add GitHub CLI repository
+type -p curl >/dev/null || (sudo apt update && sudo apt install curl -y)
+curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg \
+&& sudo chmod go+r /usr/share/keyrings/githubcli-archive-keyring.gpg \
+&& echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null
+
+# Install GitHub CLI
+sudo apt update
+sudo apt install gh -y
+
 # Install Node.js 18.x
 curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
 sudo apt-get install -y nodejs
@@ -11,6 +21,16 @@ sudo npm install -g pm2
 # Install PostgreSQL
 sudo apt-get update
 sudo apt-get install -y postgresql postgresql-contrib
+
+# Create application directory
+sudo mkdir -p /var/www/drops-backend
+cd /var/www/drops-backend
+
+# Authenticate with GitHub (you'll need to follow the prompts)
+gh auth login
+
+# Clone the repository using GitHub CLI
+gh repo clone RafikBENKHADEMyassir/drops_backend .
 
 # Create uploads directories
 mkdir -p uploads/profiles
