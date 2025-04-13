@@ -299,4 +299,78 @@ router.post('/complete-profile', authenticateUser, async (req: Request, res: Res
     res.status(500).json({ message: 'Server error', success: false });
   }
 });
+// Add email verification route
+router.post(
+  '/register/email',
+  [
+    body('email').isEmail().withMessage('Valid email required'),
+    body('password').isLength({ min: 6 }).withMessage('Password must be at least 6 characters'),
+  ],
+  async (req: Request, res: Response): Promise<void> => {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        res.status(400).json({ errors: errors.array() });
+        return;
+      }
+
+      const { email, password } = req.body;
+
+      // Check if email already exists
+      const existingUser = await prisma.user.findUnique({
+        where: { email },
+      });
+
+      if (existingUser) {
+        res.status(400).json({ 
+          message: 'Email already in use',
+          success: false 
+        });
+        return;
+      }
+ // ✅ Generate Salt & Hash Password
+ const salt = await bcrypt.genSalt(10);
+ const hashedPassword = await bcrypt.hash(password, salt);
+
+ // ✅ Create User
+ const newUser = await prisma.user.create({
+   data: {
+     email,
+     password: hashedPassword,
+     isEmailVerified: false,
+     isPhoneVerified: false,
+     createdAt: new Date(),
+     updatedAt: new Date(),
+   },
+ });
+
+ // ✅ Generate JWT Token
+ const token = jwt.sign({ userId: newUser.id }, process.env.JWT_SECRET as string, { expiresIn: '7m' });
+
+ const response: AuthResponse = {
+   token,
+   user: {
+     id: newUser.id,
+     email: newUser.email,
+     name: newUser.name || '',
+     firstName: newUser.firstName || undefined,
+     lastName: newUser.lastName || undefined,
+     profileImageUrl: newUser.profile_image_url || undefined,
+     isProfileComplete: Boolean(newUser.name && newUser.email),
+     isEmailVerified: true,
+     isPhoneVerified: true,
+   },
+   success: true,
+ };
+
+      res.status(201).json(response);
+    } catch (error) {
+      console.error("Error in email registration:", error);
+      res.status(500).json({ 
+        message: 'Server error',
+        success: false 
+      });
+    }
+  }
+);
   export default router;
