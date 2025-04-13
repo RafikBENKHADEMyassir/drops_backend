@@ -4,8 +4,9 @@
   "main": "index.js",
   "scripts": {
     "dev": "ts-node-dev --respawn --transpile-only src/index.ts",
-    "build": "tsc",
+    "build": "tsc && cp -R uploads dist/ && cp .env dist/",
     "start": "node dist/index.js",
+    "prod": "npm run build && npm run start",
     "lint": "eslint . --ext .ts",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
