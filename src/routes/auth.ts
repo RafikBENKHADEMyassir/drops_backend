@@ -367,7 +367,7 @@ router.post(
     } catch (error) {
       console.error("Error in email registration:", error);
       res.status(500).json({ 
-        message: 'Server error',
+        message: 'Server error'+error.message,
         success: false 
       });
     }
