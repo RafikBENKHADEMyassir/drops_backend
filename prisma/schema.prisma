@@ -1,0 +1,86 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id       String  @id @default(uuid())
+  name     String?
+  firstName String?
+  lastName  String?
+  email    String  @unique
+  password String
+  phone            String?
+  isEmailVerified  Boolean   @default(false)
+  isPhoneVerified  Boolean   @default(false)
+  drops    Drop[]
+  profile_image_url String? 
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  // Opposite relations
+  friends        Friend[]        @relation("UserFriends")
+  friendOf       Friend[]        @relation("FriendOfUser")
+  sentRequests   FriendRequest[] @relation("SentRequests")
+  receivedRequests FriendRequest[] @relation("ReceivedRequests")
+  blockedUsers   BlockedUser[]   @relation("UserBlockedUsers")
+  blockedByUsers BlockedUser[]   @relation("BlockedByUsers")
+  sharedWithMe      SharedDrop[]    @relation("SharedWithUser") // Add this line
+}
+
+model Drop {
+  id          String   @id @default(uuid())
+  type        String
+  title       String
+  content     String
+  location    Json
+  createdAt   DateTime @default(now())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade) // ✅ Cascade delete
+  sharedWith  SharedDrop[]
+}
+model SharedDrop {
+  id        String   @id @default(uuid())
+  dropId    String
+  friendId  String
+  createdAt DateTime @default(now())
+
+  drop      Drop     @relation(fields: [dropId], references: [id], onDelete: Cascade)
+  friend    User     @relation("SharedWithUser", fields: [friendId], references: [id], onDelete: Cascade) // Update this line
+
+  @@unique([dropId, friendId]) // Prevent duplicate shares
+}
+model Friend {
+  id        String   @id @default(uuid())
+  userId    String
+  friendId  String
+  createdAt DateTime @default(now())
+
+  user      User     @relation("UserFriends", fields: [userId], references: [id], onDelete: Cascade)
+  friend    User     @relation("FriendOfUser", fields: [friendId], references: [id], onDelete: Cascade)
+}
+
+model FriendRequest {
+  id          String   @id @default(uuid())
+  senderId    String
+  recipientId String
+  status      String   // e.g., "pending", "accepted", "rejected"
+  createdAt   DateTime @default(now())
+
+  sender      User     @relation("SentRequests", fields: [senderId], references: [id], onDelete: Cascade)
+  recipient   User     @relation("ReceivedRequests", fields: [recipientId], references: [id], onDelete: Cascade)
+}
+
+model BlockedUser {
+  id        String   @id @default(uuid())
+  userId    String
+  blockedId String
+  createdAt DateTime @default(now())
+
+  user      User     @relation("UserBlockedUsers", fields: [userId], references: [id], onDelete: Cascade)
+  blocked   User     @relation("BlockedByUsers", fields: [blockedId], references: [id], onDelete: Cascade)
+}
