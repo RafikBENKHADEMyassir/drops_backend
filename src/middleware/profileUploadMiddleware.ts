@@ -3,10 +3,10 @@ import path from 'path';
 import { Request, Response } from 'express';
 
 const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
+  destination: (_req, _file, cb) => {
     cb(null, 'uploads/profiles/');
   },
-  filename: (req, file, cb) => {
+  filename: (_req, file, cb) => {
     const uniqueSuffix = `${Date.now()}-${Math.round(Math.random() * 1E9)}`;
     // Get extension from original file or default to .jpg
     const ext = path.extname(file.originalname).toLowerCase() || '.jpg';
@@ -15,7 +15,7 @@ const storage = multer.diskStorage({
 });
 
 // Improved image file filter with more flexible MIME type checking
-const imageFileFilter = (req: Request, file: Express.Multer.File, cb: multer.FileFilterCallback) => {
+const imageFileFilter = (_req: Request, file: Express.Multer.File, cb: multer.FileFilterCallback) => {
   console.log('Incoming file details:', {
     fieldname: file.fieldname,
     originalname: file.originalname,

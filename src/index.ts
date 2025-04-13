@@ -3,7 +3,6 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import helmet from 'helmet';
 import morgan from 'morgan';
-import { PrismaClient } from '@prisma/client';
 import path from 'path';
 import authRoutes from './routes/auth';
 import dropRoutes from "./routes/drops";
@@ -24,7 +23,7 @@ app.use("/api/drops", dropRoutes);
 app.use("/uploads", express.static(path.join(__dirname, "../uploads")));
 
 // Health Check
-app.get('/', (req, res) => {
+app.get('/', (_req, res) => {
   res.send('SAW API is running!');
 });
 

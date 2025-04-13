@@ -7,12 +7,12 @@ import { body, validationResult } from 'express-validator';
 const router = express.Router();
 const prisma = new PrismaClient();
 
-interface DropRequestBody {
-    type: string;
-    title: string;
-    content: string;
-    location: string;
-  }
+// interface DropRequestBody {
+//     type: string;
+//     title: string;
+//     content: string;
+//     location: string;
+//   }
 
 // ✅ Create a new Drop (Digital or Postal)
 router.post('/',  [authenticateUser,dropUpload,

@@ -173,7 +173,7 @@ router.get("/protected", authenticateUser, (req, res) => {
     res.json({ message: "You have access to this protected route!", userId: req.user?.userId });
   });
 
-  router.get("/debug/users", async (req, res) => {
+  router.get("/debug/users", async (_req, res) => {
     const users = await prisma.user.findMany();
     res.json(users);
   });
