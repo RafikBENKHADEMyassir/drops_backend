@@ -114,25 +114,83 @@ router.get('/', authenticateUser, async (req: Request, res: Response) => {
   });
   
   // ✅ Search Users
-  router.get('/search', authenticateUser, async (req: Request, res: Response) => {
+  router.get('/search', authenticateUser, async (req: Request, res: Response)=> {
     const { q } = req.query;
+    const authUserId = req.user?.userId;
     if (!q || typeof q !== 'string') {
-      res.status(400).json({ message: 'Query parameter is required' });
-      return;
+       res.status(400).json({ message: 'Query parameter is required' });
     }
   
     try {
-      const users = await prisma.user.findMany({
+      // Find all users blocked by or who blocked the requester
+      const blockedRelations = await prisma.blockedUser.findMany({
         where: {
           OR: [
-            { name: { contains: q, mode: 'insensitive' } },
-            { email: { contains: q, mode: 'insensitive' } },
+            { userId: authUserId },
+            { blockedId: authUserId },
           ],
         },
       });
-      res.json(users);
+  
+      const blockedUserIds = new Set<string>();
+      for (const relation of blockedRelations) {
+        if (relation.userId === authUserId) {
+          blockedUserIds.add(relation.blockedId);
+        } else {
+          blockedUserIds.add(relation.userId);
+        }
+      }
+  
+      const users = await prisma.user.findMany({
+        where: {
+          AND: [
+            { id: { not: authUserId } }, // Exclude requester
+            { id: { notIn: Array.from(blockedUserIds) } }, // Exclude blocked users
+            {
+              OR: [
+                { name: { contains: q, mode: 'insensitive' } },
+                { email: { contains: q, mode: 'insensitive' } },
+              ],
+            },
+          ],
+        },
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          profile_image_url: true,
+          friends: {
+            where: { friendId: authUserId },
+          },
+          friendOf: {
+            where: { userId: authUserId },
+          },
+          sentRequests: {
+            where: { recipientId: authUserId },
+          },
+          receivedRequests: {
+            where: { senderId: authUserId },
+          },
+        },
+      });
+  
+      const result = users.map(user => {
+        const isFriend = user.friends.length > 0 || user.friendOf.length > 0;
+        const hasPendingRequest = user.sentRequests.length > 0 || user.receivedRequests.length > 0;
+  
+        return {
+          id: user.id,
+          name: user.name,
+          email: user.email,
+          profileImageUrl: user.profile_image_url,
+          isFriend,
+          hasPendingRequest,
+        };
+      });
+  
+      res.status(200).json(result);
     } catch (error) {
-      console.error("Error searching users:", error);
+      console.error('Error searching users:', error);
       res.status(500).json({ message: 'Server error' });
     }
   });
