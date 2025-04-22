@@ -21,7 +21,8 @@ model User {
   profile_image_url String? 
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
-
+  verificationToken String? 
+  tokenExpiry      DateTime? 
   // Opposite relations
   friends        Friend[]        @relation("UserFriends")
   friendOf       Friend[]        @relation("FriendOfUser")
@@ -30,6 +31,10 @@ model User {
   blockedUsers   BlockedUser[]   @relation("UserBlockedUsers")
   blockedByUsers BlockedUser[]   @relation("BlockedByUsers")
   sharedWithMe      SharedDrop[]    @relation("SharedWithUser") // Add this line
+  participants     Participant[]
+  messages         Message[]
+  readMessages     MessageRead[]
+  postalDrops       PostalDrop[]
 }
 
 model Drop {
@@ -83,4 +88,119 @@ model BlockedUser {
 
   user      User     @relation("UserBlockedUsers", fields: [userId], references: [id], onDelete: Cascade)
   blocked   User     @relation("BlockedByUsers", fields: [blockedId], references: [id], onDelete: Cascade)
+}
+
+// Add these models to your existing schema.prisma file
+
+model Conversation {
+  id            String    @id @default(uuid())
+  name          String?   // For group chats
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  
+  // Relations
+  participants  Participant[]
+  messages      Message[]
+}
+
+model Participant {
+  id              String       @id @default(uuid())
+  userId          String
+  conversationId  String
+  joinedAt        DateTime     @default(now())
+  isAdmin         Boolean      @default(false)
+  
+  // Relations
+  user            User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  conversation    Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  
+  @@unique([userId, conversationId])  // A user can only be in a conversation once
+}
+
+model Message {
+  id              String       @id @default(uuid())
+  conversationId  String
+  senderId        String
+  content         String
+  attachmentUrl   String?
+  attachmentType  String?
+  status          String       // "sending", "sent", "delivered", "read", "failed"
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+  isDeleted       Boolean      @default(false)
+  
+  // Relations
+  conversation    Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sender          User         @relation(fields: [senderId], references: [id], onDelete: Cascade)
+  readBy          MessageRead[]
+}
+
+model MessageRead {
+  id              String       @id @default(uuid())
+  messageId       String
+  userId          String
+  readAt          DateTime     @default(now())
+  
+  // Relations
+  message         Message      @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  user            User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@unique([messageId, userId])  // A user can only read a message once
+}
+
+model PhoneVerification {
+  phone           String    @id @unique
+  otpHash         String
+  expiresAt       DateTime
+  attempts        Int       @default(0)
+  countryIsoCode  String
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+}
+
+model PostalDrop {
+  id                String      @id @default(uuid())
+  userId            String
+  status            String      // "draft", "ordered", "printing", "shipped", "delivered"
+  cardType          String      // Type/style of card
+  frontDesign       Json        // JSON data containing front design details
+  backDesign        Json        // JSON data containing back design details
+  recipientAddress  Json        // Shipping address of recipient 
+  senderAddress     Json        // Address of sender for the card
+  personalMessage   String?     // Optional personal message
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
+  qrCode            QrCode?     // One-to-one relation with QR code
+  order             Order?      // One-to-one relation with order info
+  user              User        @relation(fields: [userId], references: [id])
+}
+
+model QrCode {
+  id                String      @id @default(uuid())
+  postalDropId      String      @unique
+  type              String      // "static" or "dynamic"
+  contentType       String      // "image", "video", "audio"
+  contentUrl        String      // URL to the content
+  thumbnailUrl      String?     // Optional thumbnail image
+  scanCount         Int         @default(0)
+  lastScanned       DateTime?
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
+  postalDrop        PostalDrop  @relation(fields: [postalDropId], references: [id])
+}
+
+model Order {
+  id                String      @id @default(uuid())
+  postalDropId      String      @unique
+  amount            Float
+  currency          String      @default("USD")
+  shippingMethod    String
+  shippingCost      Float
+  paymentMethod     String
+  paymentStatus     String      // "pending", "paid", "failed"
+  trackingNumber    String?
+  estimatedDelivery DateTime?
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
+  postalDrop        PostalDrop  @relation(fields: [postalDropId], references: [id])
 }

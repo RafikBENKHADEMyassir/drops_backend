@@ -246,4 +246,217 @@ router.get('/mine', authenticateUser, async (req: Request, res: Response): Promi
     res.status(500).json({ message: 'Server error' });
   }
 });
+
+router.post('/:id/unlock', authenticateUser, async (req: Request, res: Response): Promise<void> => {
+  const dropId = req.params.id;
+  const userId = req.user?.userId;
+  
+  try {
+    // Find the drop
+    const drop = await prisma.drop.findUnique({
+      where: { id: dropId },
+      include: {
+        sharedWith: true,
+        user: {
+          select: {
+            id: true,
+            name: true,
+            profile_image_url: true,
+          },
+        },
+      }
+    });
+    
+    if (!drop) {
+      res.status(404).json({ message: 'Drop not found' });
+      return;
+    }
+    
+    // Check if the user is the owner or the drop is shared with them
+    const isOwner = drop.userId === userId;
+    const isSharedWithUser = drop.sharedWith.some(share => share.friendId === userId);
+    
+    if (!isOwner && !isSharedWithUser) {
+      res.status(403).json({ message: 'Not authorized to unlock this drop' });
+      return;
+    }
+    
+    // Update the drop's metadata to mark it as unlocked for this user
+    // Note: In a real implementation, you might want to track this in a separate table
+    // that records which users have unlocked which drops
+    
+    // For now, we'll just return success
+    // In a real implementation, you would update the database
+    
+    // Format the response to match Flutter Drop model
+    const formattedDrop = {
+      id: drop.id,
+      title: drop.title,
+      description: drop.content,
+      createdAt: drop.createdAt.toISOString(),
+      type: drop.type.toLowerCase(),
+      creatorId: drop.userId,
+      sharedWithUserIds: drop.sharedWith.map(share => share.friendId),
+      imageUrl: drop.content.startsWith('/uploads/') ? drop.content : null,
+      metadata: {
+        location: drop.location,
+        creator: {
+          name: drop.user.name,
+          profile_image_url: drop.user.profile_image_url,
+        },
+        sharedWith: drop.sharedWith.map(share => ({
+          id: share.friendId,
+          // You would need to join with User table to get these details
+          name: 'User', // Placeholder
+          profile_image_url: null, // Placeholder
+          sharedAt: share.createdAt,
+        })),
+        isUnlocked: true, // Mark as unlocked
+      },
+    };
+    
+    res.json(formattedDrop);
+  } catch (error) {
+    console.error('Error unlocking drop:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+router.get('/nearby', authenticateUser, async (req: Request, res: Response): Promise<void> => {
+  try {
+    // Get query parameters
+    const lat = parseFloat(req.query.lat as string);
+    const lng = parseFloat(req.query.lng as string);
+    const radius = parseFloat(req.query.radius as string) || 5.0; // Default to 5km
+    
+    // Validate parameters
+    if (isNaN(lat) || isNaN(lng)) {
+      res.status(400).json({ message: 'Invalid latitude or longitude' });
+      return;
+    }
+
+    // Get the current user's ID
+    const userId = req.user?.userId;
+    
+    // Find drops within the specified radius
+    // For PostgreSQL with PostGIS extension, you could use ST_Distance
+    // Here, we'll fetch all public drops and filter them in-memory (not efficient for production)
+    const allDrops = await prisma.drop.findMany({
+      where: {
+        OR: [
+          // User's own drops
+          { userId: userId },
+          
+          // Drops shared with the user
+          {
+            sharedWith: {
+              some: {
+                friendId: userId
+              }
+            }
+          }
+        ]
+      },
+      include: {
+        sharedWith: {
+          include: {
+            friend: {
+              select: {
+                id: true,
+                name: true,
+                profile_image_url: true,
+              },
+            },
+          },
+        },
+        user: {
+          select: {
+            id: true,
+            name: true,
+            profile_image_url: true,
+          },
+        },
+      },
+      orderBy: {
+        createdAt: 'desc',
+      },
+    });
+    
+    // Helper function to calculate distance between two coordinates using the Haversine formula
+    function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
+      const R = 6371; // Earth's radius in kilometers
+      const dLat = (lat2 - lat1) * Math.PI / 180;
+      const dLon = (lon2 - lon1) * Math.PI / 180;
+      
+      const a = 
+        Math.sin(dLat/2) * Math.sin(dLat/2) +
+        Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * 
+        Math.sin(dLon/2) * Math.sin(dLon/2);
+      
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+      const distance = R * c; // Distance in kilometers
+      
+      return distance;
+    }
+    
+    // Filter drops by distance
+    const nearbyDrops = allDrops.filter(drop => {
+      try {
+        // Parse location from JSON
+        const location = drop.location;
+        if (!location || !Array.isArray(location) || location.length < 2) {
+          return false;
+        }
+        
+        const dropLat = typeof location[0] === 'string' ? parseFloat(location[0]) : NaN;
+        const dropLng = typeof location[1] === 'string' ? parseFloat(location[1]) : NaN;
+        
+        if (isNaN(dropLat) || isNaN(dropLng)) {
+          return false;
+        }
+        
+        // Calculate distance using the Haversine formula
+        const distance = calculateDistance(lat, lng, dropLat, dropLng);
+        
+        return distance <= radius;
+      } catch (e) {
+        console.error('Error processing drop location:', e);
+        return false;
+      }
+    });
+    
+    // Format the response to match Flutter Drop model
+    const formattedDrops = nearbyDrops.map(drop => ({
+      id: drop.id,
+      title: drop.title,
+      description: drop.content, // Using content as description
+      createdAt: drop.createdAt.toISOString(),
+      type: drop.type.toLowerCase(), // Ensure it matches DropType enum
+      creatorId: drop.userId,
+      sharedWithUserIds: drop.sharedWith.map(share => share.friend.id),
+      imageUrl: drop.content.startsWith('/uploads/') ? drop.content : null, // If content is a file path, use it as imageUrl
+      metadata: {
+        location: drop.location,
+        creator: {
+          id: drop.user.id,
+          name: drop.user.name,
+          profile_image_url: drop.user.profile_image_url,
+        },
+        sharedWith: drop.sharedWith.map(share => ({
+          id: share.friend.id,
+          name: share.friend.name,
+          profile_image_url: share.friend.profile_image_url,
+          sharedAt: share.createdAt,
+        })),
+        // Set isUnlocked to false by default - users need to be at the location to unlock
+        isUnlocked: false
+      },
+    }));
+console.log('Nearby drops:', formattedDrops[0].metadata.location?.toString());
+    res.json(formattedDrops);
+  } catch (error) {
+    console.error('Error fetching nearby drops:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
 export default router;

@@ -148,8 +148,8 @@ router.get('/', authenticateUser, async (req: Request, res: Response) => {
             { id: { notIn: Array.from(blockedUserIds) } }, // Exclude blocked users
             {
               OR: [
-                { name: { contains: q, mode: 'insensitive' } },
-                { email: { contains: q, mode: 'insensitive' } },
+                { name: { contains: q as string, mode: 'insensitive' } },
+                { email: { contains: q as string, mode: 'insensitive' } },
               ],
             },
           ],
