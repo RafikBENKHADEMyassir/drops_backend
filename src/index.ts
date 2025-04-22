@@ -14,6 +14,7 @@ import { rateLimit } from 'express-rate-limit';  // Added rate limiting for secu
 import postalDropRoutes from './routes/postal-drop.routes';
 import qrCodeRoutes from './routes/qr-code.routes';
 import orderRoutes from './routes/order.routes';
+import mediaUploadRoutes from './routes/media-upload.routes';
 dotenv.config();
 const app = express();
 
@@ -48,12 +49,14 @@ app.use('/api/qr-codes', qrCodeRoutes);
 app.use('/api/orders', orderRoutes);
 app.use("/uploads", express.static(path.join(__dirname, "../uploads")));
 app.use('/api/orders/webhook', express.raw({ type: 'application/json' }));
-
+// app.use('/uploads', express.static('uploads'));
+app.use('/api/upload', mediaUploadRoutes);
+// 
 // Health Check
 app.get('/', (_req, res) => {
   const currentDate = new Date('2025-04-16T17:37:38Z');  // Based on provided date
   res.send(`SAW API is running! Current server time: ${currentDate.toISOString()}`);
-});
+}); 
 
 // Make io available to the app
 app.set('io', io);

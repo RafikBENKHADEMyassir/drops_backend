@@ -70,7 +70,7 @@ router.post(
       expiryTime.setMinutes(expiryTime.getMinutes() + 10);
       
       // Store OTP data in database (either update existing record or create new one)
-      const phoneVerification = await prisma.phoneVerification.upsert({
+       await prisma.phoneVerification.upsert({
         where: { phone },
         update: {
           otpHash: hashedOTP,
@@ -141,7 +141,7 @@ router.post(
         return;
       }
 
-      const { phone, otp, countryIsoCode } = req.body;
+      const { phone, otp } = req.body;
 
       // Find phone verification record
       const verification = await prisma.phoneVerification.findUnique({
