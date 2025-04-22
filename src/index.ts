@@ -62,10 +62,10 @@ app.get('/', (_req, res) => {
 app.set('io', io);
 
 // ✅ Start server and export it for Jest to close
-let serverInstance: any = null;
+// let serverInstance: any = null;
 if (process.env.NODE_ENV !== 'test') {
   const PORT = process.env.PORT || 3000;
-  serverInstance = server.listen(PORT, () => console.log(`Server running on port ${PORT} at ${new Date().toISOString()}`));
+  server.listen(PORT, () => console.log(`Server running on port ${PORT} at ${new Date().toISOString()}`));
 }
 
 export { app, server };

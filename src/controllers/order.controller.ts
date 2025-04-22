@@ -2,7 +2,7 @@ import { Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
 // import paymentService from '../services/payment.service';
 import printingService from '../services/printing.service';
-import Stripe from 'stripe';
+// import Stripe from 'stripe';
 
 const prisma = new PrismaClient();
 
@@ -125,18 +125,18 @@ class OrderController {
   /**
    * Process payment webhook from payment provider
    */
-  async processPaymentWebhook(req: Request, res: Response): Promise<void> {
+  async processPaymentWebhook(_req: Request, res: Response): Promise<void> {
     try {
-      const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
-      const signature = req.headers['stripe-signature'] as string;
-      const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET as string;
+      // const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
+      // const signature = req.headers['stripe-signature'] as string;
+      // const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET as string;
   
-      let event: Stripe.Event;
+      // let event: Stripe.Event;
   
       try {
         // For Stripe webhooks, need to use raw body
-        const rawBody = (req as any).rawBody || req.body;
-        event = stripe.webhooks.constructEvent(rawBody, signature, webhookSecret);
+        // const rawBody = (req as any).rawBody || req.body;
+        // event = stripe.webhooks.constructEvent(rawBody, signature, webhookSecret);
       } catch (err: any) {
         console.error('Webhook signature verification failed:', err.message);
         res.status(400).json({

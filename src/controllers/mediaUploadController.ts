@@ -1,6 +1,5 @@
 import { Request, Response } from 'express';
 import path from 'path';
-import fs from 'fs';
 import { handleMediaUpload } from '../middleware/mediaUploadMiddleware';
 import sharp from 'sharp';
 

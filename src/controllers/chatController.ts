@@ -19,32 +19,30 @@ const storage = multer.diskStorage({
     cb(null, `${uniqueSuffix}-${file.originalname}`);
   }
 });
-
 const upload = multer({ 
-    storage: storage,
-    limits: {
-      fileSize: 5 * 1024 * 1024, // 5MB file size limit
-    },
-    fileFilter: (_req, file, cb) => {
-      const allowedTypes = [
-        'image/jpeg', 'image/png', 'image/gif',
-        'video/mp4', 'video/quicktime',
-        'application/pdf', 'application/msword',
-        'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
-      ];
-      
-      if (allowedTypes.includes(file.mimetype)) {
-        cb(null, true);
-      } else {
-        // Fix for TypeScript error: pass null as the first argument
-        // and use the second argument (boolean) to reject the file
-        cb(null, false);
-        // If you want to provide an error message, you can create and throw an Error
-        // or use cb.call() to bypass TypeScript's type checking
-        return new Error('Unsupported file type');
-      }
+  storage: storage,
+  limits: {
+    fileSize: 5 * 1024 * 1024, // 5MB file size limit
+  },
+  fileFilter: (_req, file, cb) => {
+    const allowedTypes = [
+      'image/jpeg', 'image/png', 'image/gif',
+      'video/mp4', 'video/quicktime',
+      'application/pdf', 'application/msword',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+    ];
+    
+    if (allowedTypes.includes(file.mimetype)) {
+      cb(null, true);
+      return; // Add return statement
+    } else {
+      // Reject the file
+      cb(null, false);
+      // Create an error
+      return new Error('Unsupported file type');
     }
-  });
+  }
+});
 
 const chatService = new ChatService();
 
@@ -131,52 +129,51 @@ export default class ChatController {
   }
 
   // Send a new message
-  async sendMessage(req: Request, res: Response) {
-    // Use multer to handle file uploads
-    upload.single('attachment')(req, res, async (err) => {
-      if (err) {
-        console.error('Error uploading file:', err);
-        return res.status(400).json({
+  async sendMessage(req: Request, res: Response) {upload.single('attachment')(req, res, async (err) => {
+    if (err) {
+      console.error('Error uploading file:', err);
+      return res.status(400).json({
+        success: false,
+        message: err.message || 'File upload error'
+      });
+    }
+    
+    try {
+      const userId = req.user?.userId;
+      if (!userId) {
+        return res.status(401).json({  // Added return here
           success: false,
-          message: err.message || 'File upload error'
+          message: 'Unauthorized'
         });
       }
       
-      try {
-        const userId = req.user?.userId;
-        if (!userId) {
-            res.status(401).json({
-            success: false,
-            message: 'Unauthorized'
-            });
-        }
-        const { id } = req.params;
-        const { content } = req.body;
-        
-        let attachment;
-        if (req.file) {
-          const fileName = req.file.filename;
-          const filePath = `/uploads/chat/${fileName}`;
-          attachment = {
-            url: filePath,
-            type: req.file.mimetype
-          };
-        }
-        
-        const message = await chatService.sendMessage(id, userId!, content, attachment);
-        
-        res.status(201).json({
-          success: true,
-          message
-        });
-      } catch (error) {
-        console.error('Error in sendMessage:', error);
-        res.status(error instanceof Error && error.message.includes('not a member') ? 403 : 500).json({
-          success: false,
-          message: error instanceof Error ? error.message : 'Failed to send message'
-        });
+      const { id } = req.params;
+      const { content } = req.body;
+      
+      let attachment;
+      if (req.file) {
+        const fileName = req.file.filename;
+        const filePath = `/uploads/chat/${fileName}`;
+        attachment = {
+          url: filePath,
+          type: req.file.mimetype
+        };
       }
-    });
+      
+      const message = await chatService.sendMessage(id, userId, content, attachment);
+      
+      return res.status(201).json({  // Added return here for consistency
+        success: true,
+        message
+      });
+    } catch (error) {
+      console.error('Error in sendMessage:', error);
+      return res.status(error instanceof Error && error.message.includes('not a member') ? 403 : 500).json({  // Added return here
+        success: false,
+        message: error instanceof Error ? error.message : 'Failed to send message'
+      });
+    }
+  });
   }
 
   // Create a new conversation
@@ -194,10 +191,10 @@ export default class ChatController {
       try {
         const userId = req.user?.userId;
         if (!userId) {
-            res.status(401).json({
+          return res.status(401).json({  // Added return here
             success: false,
             message: 'Unauthorized'
-            });
+          });
         }
         const { participantIds, name } = req.body;
         
@@ -208,7 +205,7 @@ export default class ChatController {
         
         // Create the conversation
         const conversation = await chatService.createConversation(
-          userId!,
+          userId,
           parsedParticipantIds,
           name
         );
@@ -216,13 +213,13 @@ export default class ChatController {
         // If there's a group image uploaded, update the conversation (this would require additional logic)
         // For simplicity, we're not handling group images in this example
         
-        res.status(201).json({
+        return res.status(201).json({  // Added return here
           success: true,
           conversation
         });
       } catch (error) {
         console.error('Error in createConversation:', error);
-        res.status(500).json({
+        return res.status(500).json({  // Added return here
           success: false,
           message: error instanceof Error ? error.message : 'Failed to create conversation'
         });

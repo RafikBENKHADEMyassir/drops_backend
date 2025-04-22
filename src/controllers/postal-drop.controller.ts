@@ -409,6 +409,298 @@ class PostalDropController {
       });
     }
   }
+/**
+ * Update an entire postal drop
+ */
+async updatePostalDrop(req: Request, res: Response) {
+  try {
+    const { id } = req.params;
+    const userId = (req as any).user.userId;
+    const postalDropData = req.body;
+
+    // First, find the postal drop to verify ownership
+    const existingDrop = await prisma.postalDrop.findUnique({
+      where: { id },
+    });
+
+    if (!existingDrop) {
+      return res.status(404).json({
+        success: false,
+        message: 'Postal drop not found'
+      });
+    }
+
+    // Verify ownership
+    if (existingDrop.userId !== userId) {
+      return res.status(403).json({
+        success: false,
+        message: 'You do not have permission to update this postal drop'
+      });
+    }
+
+    // Update the postal drop with all data
+    const updatedPostalDrop = await prisma.postalDrop.update({
+      where: { id },
+      data: {
+        status: postalDropData.status,
+        personalMessage: postalDropData.personalMessage,
+        cardType: postalDropData.cardType,
+        // Only update fields that are provided
+        frontDesign: postalDropData.frontDesign || existingDrop.frontDesign,
+        backDesign: postalDropData.backDesign || existingDrop.backDesign,
+        recipientAddress: postalDropData.recipientAddress || existingDrop.recipientAddress,
+        senderAddress: postalDropData.senderAddress || existingDrop.senderAddress,
+        updatedAt: new Date()
+      },
+      include: {
+        qrCode: true,
+        order: true
+      }
+    });
+
+    // Format dates for consistent JSON serialization
+    const result = {
+      ...updatedPostalDrop,
+      createdAt: updatedPostalDrop.createdAt.toISOString(),
+      updatedAt: updatedPostalDrop.updatedAt.toISOString(),
+      qrCode: updatedPostalDrop.qrCode ? {
+        ...updatedPostalDrop.qrCode,
+        createdAt: updatedPostalDrop.qrCode.createdAt.toISOString(),
+        updatedAt: updatedPostalDrop.qrCode.updatedAt.toISOString(),
+        lastScanned: updatedPostalDrop.qrCode.lastScanned?.toISOString()
+      } : null,
+      order: updatedPostalDrop.order ? {
+        ...updatedPostalDrop.order,
+        createdAt: updatedPostalDrop.order.createdAt.toISOString(),
+        updatedAt: updatedPostalDrop.order.updatedAt.toISOString(),
+        estimatedDelivery: updatedPostalDrop.order.estimatedDelivery?.toISOString()
+      } : null
+    };
+
+    return res.status(200).json(result);
+  } catch (error: any) {
+    console.error('Error updating postal drop:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to update postal drop',
+      error: error.message
+    });
+  }
+}
+
+/**
+ * Update recipient address
+ */
+async updateRecipientAddress(req: Request, res: Response) {
+  try {
+    const { id } = req.params;
+    const recipientAddress = req.body;
+    const userId = (req as any).user.userId;
+    
+    // Verify ownership
+    const postalDrop = await prisma.postalDrop.findUnique({
+      where: { id }
+    });
+    
+    if (!postalDrop) {
+      return res.status(404).json({
+        success: false,
+        message: 'Postal drop not found'
+      });
+    }
+    
+    if (postalDrop.userId !== userId) {
+      return res.status(403).json({
+        success: false,
+        message: 'Unauthorized access to this postal drop'
+      });
+    }
+    
+    // Update the recipient address
+    const updatedPostalDrop = await prisma.postalDrop.update({
+      where: { id },
+      data: {
+        recipientAddress,
+        updatedAt: new Date()
+      },
+      include: {
+        qrCode: true,
+        order: true
+      }
+    });
+    
+    // Format dates for consistent JSON serialization
+    const result = {
+      ...updatedPostalDrop,
+      createdAt: updatedPostalDrop.createdAt.toISOString(),
+      updatedAt: updatedPostalDrop.updatedAt.toISOString(),
+      qrCode: updatedPostalDrop.qrCode ? {
+        ...updatedPostalDrop.qrCode,
+        createdAt: updatedPostalDrop.qrCode.createdAt.toISOString(),
+        updatedAt: updatedPostalDrop.qrCode.updatedAt.toISOString(),
+        lastScanned: updatedPostalDrop.qrCode.lastScanned?.toISOString()
+      } : null,
+      order: updatedPostalDrop.order ? {
+        ...updatedPostalDrop.order,
+        createdAt: updatedPostalDrop.order.createdAt.toISOString(),
+        updatedAt: updatedPostalDrop.order.updatedAt.toISOString(),
+        estimatedDelivery: updatedPostalDrop.order.estimatedDelivery?.toISOString()
+      } : null
+    };
+    
+    return res.status(200).json(result);
+  } catch (error: any) {
+    console.error('Error updating recipient address:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to update recipient address',
+      error: error.message
+    });
+  }
+}
+
+/**
+ * Update sender address
+ */
+async updateSenderAddress(req: Request, res: Response) {
+  try {
+    const { id } = req.params;
+    const senderAddress = req.body;
+    const userId = (req as any).user.userId;
+    
+    // Verify ownership
+    const postalDrop = await prisma.postalDrop.findUnique({
+      where: { id }
+    });
+    
+    if (!postalDrop) {
+      return res.status(404).json({
+        success: false,
+        message: 'Postal drop not found'
+      });
+    }
+    
+    if (postalDrop.userId !== userId) {
+      return res.status(403).json({
+        success: false,
+        message: 'Unauthorized access to this postal drop'
+      });
+    }
+    
+    // Update the sender address
+    const updatedPostalDrop = await prisma.postalDrop.update({
+      where: { id },
+      data: {
+        senderAddress,
+        updatedAt: new Date()
+      },
+      include: {
+        qrCode: true,
+        order: true
+      }
+    });
+    
+    // Format dates for consistent JSON serialization
+    const result = {
+      ...updatedPostalDrop,
+      createdAt: updatedPostalDrop.createdAt.toISOString(),
+      updatedAt: updatedPostalDrop.updatedAt.toISOString(),
+      qrCode: updatedPostalDrop.qrCode ? {
+        ...updatedPostalDrop.qrCode,
+        createdAt: updatedPostalDrop.qrCode.createdAt.toISOString(),
+        updatedAt: updatedPostalDrop.qrCode.updatedAt.toISOString(),
+        lastScanned: updatedPostalDrop.qrCode.lastScanned?.toISOString()
+      } : null,
+      order: updatedPostalDrop.order ? {
+        ...updatedPostalDrop.order,
+        createdAt: updatedPostalDrop.order.createdAt.toISOString(),
+        updatedAt: updatedPostalDrop.order.updatedAt.toISOString(),
+        estimatedDelivery: updatedPostalDrop.order.estimatedDelivery?.toISOString()
+      } : null
+    };
+    
+    return res.status(200).json(result);
+  } catch (error: any) {
+    console.error('Error updating sender address:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to update sender address',
+      error: error.message
+    });
+  }
+}
+
+/**
+ * Update personal message
+ */
+async updatePersonalMessage(req: Request, res: Response) {
+  try {
+    const { id } = req.params;
+    const { message } = req.body;
+    const userId = (req as any).user.userId;
+    
+    // Verify ownership
+    const postalDrop = await prisma.postalDrop.findUnique({
+      where: { id }
+    });
+    
+    if (!postalDrop) {
+      return res.status(404).json({
+        success: false,
+        message: 'Postal drop not found'
+      });
+    }
+    
+    if (postalDrop.userId !== userId) {
+      return res.status(403).json({
+        success: false,
+        message: 'Unauthorized access to this postal drop'
+      });
+    }
+    
+    // Update the personal message
+    const updatedPostalDrop = await prisma.postalDrop.update({
+      where: { id },
+      data: {
+        personalMessage: message,
+        updatedAt: new Date()
+      },
+      include: {
+        qrCode: true,
+        order: true
+      }
+    });
+    
+    // Format dates for consistent JSON serialization
+    const result = {
+      ...updatedPostalDrop,
+      createdAt: updatedPostalDrop.createdAt.toISOString(),
+      updatedAt: updatedPostalDrop.updatedAt.toISOString(),
+      qrCode: updatedPostalDrop.qrCode ? {
+        ...updatedPostalDrop.qrCode,
+        createdAt: updatedPostalDrop.qrCode.createdAt.toISOString(),
+        updatedAt: updatedPostalDrop.qrCode.updatedAt.toISOString(),
+        lastScanned: updatedPostalDrop.qrCode.lastScanned?.toISOString()
+      } : null,
+      order: updatedPostalDrop.order ? {
+        ...updatedPostalDrop.order,
+        createdAt: updatedPostalDrop.order.createdAt.toISOString(),
+        updatedAt: updatedPostalDrop.order.updatedAt.toISOString(),
+        estimatedDelivery: updatedPostalDrop.order.estimatedDelivery?.toISOString()
+      } : null
+    };
+    
+    return res.status(200).json(result);
+  } catch (error: any) {
+    console.error('Error updating personal message:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to update personal message',
+      error: error.message
+    });
+  }
+}
+
 }
 
 export default new PostalDropController();
