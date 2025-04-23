@@ -57,7 +57,9 @@ app.get('/', (_req, res) => {
   const currentDate = new Date('2025-04-16T17:37:38Z');  // Based on provided date
   res.send(`SAW API is running! Current server time: ${currentDate.toISOString()}`);
 }); 
-
+app.get('/api/health', (_req, res) => {
+  res.status(200).json({ status: 'ok' });
+});
 // Make io available to the app
 app.set('io', io);
 
