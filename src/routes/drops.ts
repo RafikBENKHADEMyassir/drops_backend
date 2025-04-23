@@ -456,7 +456,7 @@ console.log('Nearby drops:', formattedDrops[0].metadata.location?.toString());
     res.json(formattedDrops);
   } catch (error) {
     console.error('Error fetching nearby drops:', error);
-    res.status(500).json({ message: 'Server error' });
+    res.status(500).json({ message: 'Server error'+error });
   }
 });
 export default router;
