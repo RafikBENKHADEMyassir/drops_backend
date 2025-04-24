@@ -8,32 +8,36 @@ datasource db {
 }
 
 model User {
-  id       String  @id @default(uuid())
-  name     String?
-  firstName String?
-  lastName  String?
-  email    String  @unique
-  password String
-  phone            String?
-  isEmailVerified  Boolean   @default(false)
-  isPhoneVerified  Boolean   @default(false)
-  drops    Drop[]
-  profile_image_url String? 
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-  verificationToken String? 
-  tokenExpiry      DateTime? 
-  // Opposite relations
-  friends        Friend[]        @relation("UserFriends")
-  friendOf       Friend[]        @relation("FriendOfUser")
-  sentRequests   FriendRequest[] @relation("SentRequests")
-  receivedRequests FriendRequest[] @relation("ReceivedRequests")
-  blockedUsers   BlockedUser[]   @relation("UserBlockedUsers")
-  blockedByUsers BlockedUser[]   @relation("BlockedByUsers")
-  sharedWithMe      SharedDrop[]    @relation("SharedWithUser") // Add this line
-  participants     Participant[]
-  messages         Message[]
-  readMessages     MessageRead[]
+  id                String    @id @default(uuid())
+  name              String?
+  firstName         String?
+  lastName          String?
+  email             String    @unique
+  password          String
+  phone             String?   @unique  // Make phone unique
+  isEmailVerified   Boolean   @default(false)
+  isPhoneVerified   Boolean   @default(false)
+  isProfileComplete Boolean   @default(false)  // New field
+  authProvider      String?   // For social logins: "google", "apple", "facebook", "phone", "email"
+  providerId        String?   // ID from the provider if social login
+  profile_image_url String?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  verificationToken String?
+  tokenExpiry       DateTime?
+  
+  // Existing relations
+  drops             Drop[]
+  friends           Friend[]        @relation("UserFriends")
+  friendOf          Friend[]        @relation("FriendOfUser")
+  sentRequests      FriendRequest[] @relation("SentRequests")
+  receivedRequests  FriendRequest[] @relation("ReceivedRequests")
+  blockedUsers      BlockedUser[]   @relation("UserBlockedUsers")
+  blockedByUsers    BlockedUser[]   @relation("BlockedByUsers")
+  sharedWithMe      SharedDrop[]    @relation("SharedWithUser")
+  participants      Participant[]
+  messages          Message[]
+  readMessages      MessageRead[]
   postalDrops       PostalDrop[]
 }
 
