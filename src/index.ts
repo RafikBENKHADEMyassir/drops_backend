@@ -58,7 +58,7 @@ app.get('/', (_req, res) => {
   res.send(`SAW API is running! Current server time: ${currentDate.toISOString()}`);
 }); 
 app.get('/api/health', (_req, res) => {
-  res.status(200).json({ status: 'ok' });
+  res.status(200).json({ status: 'ok1' });
 });
 // Make io available to the app
 app.set('io', io);

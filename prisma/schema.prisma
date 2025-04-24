@@ -52,6 +52,9 @@ model SharedDrop {
   id        String   @id @default(uuid())
   dropId    String
   friendId  String
+  isLocked     Boolean   @default(true)   
+  unlockedAt   DateTime?                  
+  lastChecked  DateTime  @default(now())  
   createdAt DateTime @default(now())
 
   drop      Drop     @relation(fields: [dropId], references: [id], onDelete: Cascade)
