@@ -514,7 +514,6 @@ router.post('/complete-profile', authenticateUser, async (req: Request, res: Res
 
 
       const { name,firstName, lastName } = req.body;
-      console.log('Request body:', req.body);
       // Validate required fields
       if (!name) {
         res.status(400).json({ 
@@ -529,6 +528,7 @@ router.post('/complete-profile', authenticateUser, async (req: Request, res: Res
         lastName: lastName || '',
         name: name,//`${firstName} ${lastName}`,
         updatedAt: new Date(),
+        isProfileComplete: true,
       };
 
       // Add profile image if uploaded
