@@ -2,7 +2,7 @@ import express from 'express';
 import bcrypt from "bcrypt";
 import jwt from 'jsonwebtoken';
 import fs from 'fs';
-import path from 'path';
+import path from 'path'; 
 import { body, validationResult } from 'express-validator';
 import { PrismaClient } from '@prisma/client';
 import { Request, Response } from 'express';
@@ -11,6 +11,7 @@ import { handleProfileUpload } from '../middleware/profileUploadMiddleware';
 import emailService from '../services/emailService';
 import crypto from 'crypto';
 import twilio from 'twilio';
+import { RateLimiterMemory } from 'rate-limiter-flexible';
 
 const router = express.Router();
 const prisma = new PrismaClient();
@@ -26,13 +27,17 @@ const TWILIO_WHATSAPP_NUMBER = process.env.TWILIO_WHATSAPP_NUMBER;
 function generateOTP(): string {
   return Math.floor(100000 + Math.random() * 900000).toString();
 }
+const otpRateLimiter = new RateLimiterMemory({
+  points: 1, // Allow 1 request
+  duration: 60, // Per 60 seconds (1 minute)
+});
+
 // Send OTP via WhatsApp using Twilio
 router.post(
-  '/send-phone-otp',
+  '/send-otp',
   [
     body('phone').notEmpty().withMessage('Phone number is required'),
     body('countryIsoCode').notEmpty().withMessage('Country code is required'),
-    body('channel').isIn(['sms', 'whatsapp']).withMessage('Invalid channel specified'),
   ],
   async (req: Request, res: Response): Promise<void> => {
     try {
@@ -42,22 +47,49 @@ router.post(
         return;
       }
 
-      const { phone, countryIsoCode, channel } = req.body;
+      const { phone, countryIsoCode } = req.body;
 
-      // Check if phone already exists
-      const existingUser = await prisma.user.findFirst({
-        where: { phone }
-      });
-
-      // If user exists and already verified, don't allow resending OTP
-      if (existingUser && existingUser.isPhoneVerified) {
-        res.status(400).json({ 
-          message: 'Phone number already registered and verified',
-          success: false 
+      try {
+        await otpRateLimiter.consume(phone);
+      } catch (rateLimiterError) {
+        // Rate limit exceeded
+        const timeLeft = Math.floor(rateLimiterError.msBeforeNext / 1000) || 1;
+        res.status(429).json({
+          success: false,
+          message: `Too many requests. Please try again in ${timeLeft} seconds.`,
+          retryAfter: timeLeft
         });
         return;
       }
 
+      // // Check if phone already exists
+      const existingUser = await prisma.user.findFirst({
+        where: { phone }
+      });
+
+      // // If user exists and already verified, don't allow resending OTP
+      // if (existingUser && existingUser.isPhoneVerified) {
+      //   res.status(400).json({ 
+      //     message: 'Phone number already registered and verified',
+      //     success: false 
+      //   });
+      //   return;
+      // }
+// if user doesnt exist, create a new one, else do nothing , email field phone@drop.app, pasword deopapp$$$$
+      if (!existingUser) {
+        await prisma.user.create({
+          data: {
+            phone,
+            email: `${phone}@drop.app`,
+            password: await bcrypt.hash('dropapp$$$$', 10),
+            isEmailVerified: false,
+            isPhoneVerified: false,
+            isProfileComplete: false,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          },
+        });
+      }
       // Generate new OTP
       const otp = generateOTP();
       
@@ -94,26 +126,20 @@ router.post(
       const message = `Your Digital Drop verification code is: ${otp}. This code will expire in 10 minutes.`;
       
       // Send message via chosen channel (WhatsApp or SMS)
-      if (channel === 'whatsapp') {
-        // Send via WhatsApp
-        await twilioClient.messages.create({
-          from: `whatsapp:${TWILIO_WHATSAPP_NUMBER}`,
-          body: message,
-          to: `whatsapp:${phone}`
-        });
-      } else {
+
         // Send via SMS (fallback)
-        await twilioClient.messages.create({
-          from: process.env.TWILIO_PHONE_NUMBER || '',
-          body: message,
-          to: phone
-        });
-      }
+        // await twilioClient.messages.create({
+        //   from: process.env.TWILIO_PHONE_NUMBER || '',
+        //   body: message,
+        //   to: phone
+        // });
+      
 
       res.json({
         success: true,
-        message: `Verification code sent via ${channel}. Valid for 10 minutes.`,
-        expiresAt: expiryTime
+        message: `Verification code sent. Valid for 10 minutes.`,
+        expiresAt: expiryTime,
+        otp
       });
     } catch (error) {
       console.error("Error sending OTP:", error);
@@ -127,11 +153,10 @@ router.post(
 
 // Verify OTP and register/authenticate user
 router.post(
-  '/verify-phone-otp',
+  '/verify-otp',
   [
     body('phone').notEmpty().withMessage('Phone number is required'),
     body('otp').isLength({ min: 6, max: 6 }).withMessage('Valid 6-digit OTP is required'),
-    body('countryIsoCode').notEmpty().withMessage('Country code is required'),
   ],
   async (req: Request, res: Response): Promise<void> => {
     try {
@@ -488,21 +513,21 @@ router.post('/complete-profile', authenticateUser, async (req: Request, res: Res
     await handleProfileUpload(req, res);
 
 
-      const { firstName, lastName } = req.body;
-      
+      const { name,firstName, lastName } = req.body;
+      console.log('Request body:', req.body);
       // Validate required fields
-      if (!firstName || !lastName) {
+      if (!name) {
         res.status(400).json({ 
-          message: 'First name and last name are required',
+          message: 'User name is required',
           success: false 
         });
         return;
       }
 
       const updateData: any = {
-        firstName,
-        lastName,
-        name: `${firstName} ${lastName}`,
+       firstName: firstName || '',
+        lastName: lastName || '',
+        name: name,//`${firstName} ${lastName}`,
         updatedAt: new Date(),
       };
 
@@ -953,7 +978,274 @@ router.post('/resend-verification',
   }
 );
 
+// Apple Sign-In route
+router.post('/apple-signin',
+  [
+    body('identityToken').notEmpty().withMessage('Identity token is required'),
+    body('userData').isObject().withMessage('User data is required')
+  ],
+  async (req: Request, res: Response): Promise<void> => {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        res.status(400).json({ errors: errors.array(), success: false });
+        return;
+      }
 
+      const { identityToken, userData } = req.body;
+      
+      // Verify the Apple ID token (important in production)
+      // In a production environment, uncomment and implement this:
+      /*
+      try {
+        const decodedToken = await verifyAppleToken(identityToken);
+        // Verify audience, issuer, expiration, etc.
+        if (decodedToken.aud !== 'your.app.bundle.id') {
+          throw new Error('Invalid audience');
+        }
+      } catch (verifyError) {
+        res.status(401).json({
+          success: false,
+          message: 'Invalid Apple identity token'
+        });
+        return;
+      }
+      */
+      
+      // Extract user information from the userData
+      const { sub: providerId, email, firstName, lastName } = userData;
+      
+      if (!providerId) {
+        res.status(400).json({
+          success: false,
+          message: 'User ID is missing from Apple identity token'
+        });
+        return;
+      }
+
+      // Format name fields
+      const formattedFirstName = firstName || '';
+      const formattedLastName = lastName || '';
+      const displayName = `${formattedFirstName} ${formattedLastName}`.trim() || 'Apple User';
+
+      // Check if user already exists by Apple provider ID
+      let user = await prisma.user.findFirst({
+        where: {
+          AND: [
+            { authProvider: 'apple' },
+            { providerId: providerId.toString() }
+          ]
+        }
+      });
+
+      // If not found by provider ID, try to find by email
+      if (!user && email) {
+        user = await prisma.user.findUnique({
+          where: { email }
+        });
+      }
+
+      if (user) {
+        // Update existing user's info - be careful not to override existing data
+        user = await prisma.user.update({
+          where: { id: user.id },
+          data: {
+            authProvider: 'apple',
+            providerId: providerId.toString(),
+            // Only update email if it's provided and user doesn't already have one
+            ...(email && !user.email ? { email } : {}),
+            // Only update name fields if they're empty
+            ...((!user.name || user.name === 'Apple User') && displayName !== 'Apple User' 
+              ? { name: displayName } : {}),
+            ...((!user.firstName && formattedFirstName) 
+              ? { firstName: formattedFirstName } : {}),
+            ...((!user.lastName && formattedLastName) 
+              ? { lastName: formattedLastName } : {}),
+            // Mark email as verified if provided by Apple
+            ...(email ? { isEmailVerified: true } : {}),
+            updatedAt: new Date()
+          }
+        });
+      } else {
+        // Create new user for first-time Apple sign-in
+        const generatedEmail = email || `apple_${providerId}@drop.app`;
+        const isProfileComplete = Boolean(formattedFirstName && formattedLastName);
+        
+        // Generate a random secure password (user won't use it)
+        const password = await bcrypt.hash(crypto.randomBytes(16).toString('hex'), 10);
+        
+        user = await prisma.user.create({
+          data: {
+            email: generatedEmail,
+            password,
+            name: displayName,
+            firstName: formattedFirstName,
+            lastName: formattedLastName,
+            authProvider: 'apple',
+            providerId: providerId.toString(),
+            isEmailVerified: Boolean(email),
+            isPhoneVerified: false,
+            isProfileComplete,
+            createdAt: new Date(),
+            updatedAt: new Date()
+          }
+        });
+      }
+
+      // Generate JWT token
+      const token = jwt.sign({ userId: user.id }, JWT_SECRET, { expiresIn: '7d' });
+      
+      // Determine if user needs to complete their profile
+      const needsProfileCompletion = !user.firstName || !user.lastName || 
+        user.name === 'Apple User' || !user.name;
+
+      const response: AuthResponse = {
+        token,
+        user: {
+          id: user.id,
+          email: user.email,
+          name: user.name || '',
+          firstName: user.firstName || undefined,
+          lastName: user.lastName || undefined,
+          phone: user.phone || undefined,
+          profileImageUrl: user.profile_image_url || undefined,
+          isProfileComplete: !needsProfileCompletion,
+          isEmailVerified: user.isEmailVerified || false,
+          isPhoneVerified: user.isPhoneVerified || false
+        },
+        success: true
+      };
+
+      res.json(response);
+    } catch (error) {
+      console.error("Error in Apple authentication:", error);
+      res.status(500).json({
+        success: false,
+        message: 'Server error: ' + (error instanceof Error ? error.message : String(error))
+      });
+    }
+  }
+);
+
+
+// router.post('/social-auth',
+//   [
+//     body('provider').isIn(['google', 'apple', 'facebook']).withMessage('Invalid auth provider'),
+//     body('token').notEmpty().withMessage('Authentication token is required'),
+//     body('userData').isObject().withMessage('User data is required')
+//   ],
+//   async (req: Request, res: Response): Promise<void> => {
+//     try {
+//       const errors = validationResult(req);
+//       if (!errors.isEmpty()) {
+//         res.status(400).json({ errors: errors.array(), success: false });
+//         return;
+//       }
+
+//       const { provider, token, userData } = req.body;
+
+//       // Get provider ID from userData
+//       const providerId = userData.id;
+//       if (!providerId) {
+//         res.status(400).json({
+//           success: false,
+//           message: 'Provider ID is missing in the user data'
+//         });
+//         return;
+//       }
+
+//       // Extract user information from userData
+//       const { email, name, firstName, lastName, picture } = userData;
+
+//       // Check if a user with this provider ID already exists
+//       let user = await prisma.user.findFirst({
+//         where: {
+//           AND: [
+//             { authProvider: provider },
+//             { providerId: providerId }
+//           ]
+//         }
+//       });
+
+//       // If not found by provider, try to find by email if available
+//       if (!user && email) {
+//         user = await prisma.user.findUnique({
+//           where: { email }
+//         });
+//       }
+
+//       if (user) {
+//         // User exists - update their info if needed
+//         user = await prisma.user.update({
+//           where: { id: user.id },
+//           data: {
+//             authProvider: provider,
+//             providerId: providerId,
+//             // Only update these fields if they're empty
+//             name: user.name || name,
+//             firstName: user.firstName || firstName,
+//             lastName: user.lastName || lastName,
+//             profile_image_url: user.profile_image_url || picture,
+//             updatedAt: new Date()
+//           }
+//         });
+//       } else {
+//         // Create new user
+//         const generatedEmail = email || `${provider}_${providerId}@drop.app`;
+//         const isProfileComplete = !!(name && (firstName || lastName));
+        
+//         // Generate a random secure password they won't use (social login only)
+//         const password = await bcrypt.hash(crypto.randomBytes(16).toString('hex'), 10);
+        
+//         user = await prisma.user.create({
+//           data: {
+//             email: generatedEmail,
+//             name,
+//             firstName,
+//             lastName,
+//             profile_image_url: picture,
+//             password,
+//             authProvider: provider,
+//             providerId,
+//             isEmailVerified: !!email, // Email is verified if provided by the social provider
+//             isProfileComplete,
+//             createdAt: new Date(),
+//             updatedAt: new Date()
+//           }
+//         });
+//       }
+
+//       // Generate JWT token
+//       const jwtToken = jwt.sign({ userId: user.id }, JWT_SECRET, { expiresIn: '7d' });
+
+//       // Return the authentication response
+//       const response: AuthResponse = {
+//         token: jwtToken,
+//         user: {
+//           id: user.id,
+//           email: user.email,
+//           name: user.name || '',
+//           firstName: user.firstName || undefined,
+//           lastName: user.lastName || undefined,
+//           phone: user.phone || undefined,
+//           profileImageUrl: user.profile_image_url || undefined,
+//           isProfileComplete: Boolean(user.isProfileComplete),
+//           isEmailVerified: user.isEmailVerified || false,
+//           isPhoneVerified: user.isPhoneVerified || false,
+//         },
+//         success: true
+//       };
+
+//       res.json(response);
+//     } catch (error) {
+//       console.error("Error in social authentication:", error);
+//       res.status(500).json({
+//         success: false,
+//         message: 'Server error: ' + (error instanceof Error ? error.message : String(error))
+//       });
+//     }
+//   }
+// );
 
 
 // router.post(
