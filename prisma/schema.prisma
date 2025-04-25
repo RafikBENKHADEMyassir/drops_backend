@@ -39,6 +39,8 @@ model User {
   messages          Message[]
   readMessages      MessageRead[]
   postalDrops       PostalDrop[]
+  devices         Device[]
+  notifications   Notification[]
 }
 
 model Drop {
@@ -210,4 +212,35 @@ model Order {
   createdAt         DateTime    @default(now())
   updatedAt         DateTime    @updatedAt
   postalDrop        PostalDrop  @relation(fields: [postalDropId], references: [id])
+}
+
+model Device {
+  id            String    @id @default(uuid())
+  userId        String
+  token         String    @unique
+  deviceType    String    // "ios" or "android"
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  isActive      Boolean   @default(true)
+  
+  // Relations
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([userId])
+}
+
+model Notification {
+  id            String    @id @default(uuid())
+  userId        String
+  title         String
+  body          String
+  data          Json?     // Additional data for the notification
+  type          String    // e.g., "friendRequest", "message", "dropShared"
+  isRead        Boolean   @default(false)
+  createdAt     DateTime  @default(now())
+  
+  // Relations
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([userId])
 }

@@ -42,3 +42,4 @@ Icon
 
 # TypeScript
 *.tsbuildinfo
+firebase-service-account.json
