@@ -143,10 +143,10 @@ export const setupSocketIO = (server: HTTPServer) => {
         io.to(`user:${receiverId}`).emit('new_message', message);
     
         // Send a push notification to the receiver
-        const sender = await prisma.user.findUnique({
-          where: { id: socket.data.userId },
-          select: { name: true },
-        });
+        // const sender = await prisma.user.findUnique({
+        //   where: { id: socket.data.userId },
+        //   select: { name: true },
+        // });
         await notificationService.sendDropSharedNotification(
           dropId,
           socket.data.userId,

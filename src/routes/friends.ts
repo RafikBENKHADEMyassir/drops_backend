@@ -238,14 +238,14 @@ router.get('/', authenticateUser, async (req: Request, res: Response) => {
           status: 'pending',
         },
       });
-      const sender = await prisma.user.findUnique({
-        where: { id: req.user?.userId! },
-        select: {
-          name: true,
-          firstName: true,
-          profile_image_url: true
-        }
-      });
+      // const sender = await prisma.user.findUnique({
+      //   where: { id: req.user?.userId! },
+      //   select: {
+      //     name: true,
+      //     firstName: true,
+      //     profile_image_url: true
+      //   }
+      // });
 
       setTimeout(async () => {
         try {

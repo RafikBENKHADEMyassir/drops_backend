@@ -92,7 +92,7 @@ class NotificationService {
       }
       
       // Store notification in database
-      const notification = await prisma.notification.create({
+       await prisma.notification.create({
         data: {
           userId,
           title: payload.title,

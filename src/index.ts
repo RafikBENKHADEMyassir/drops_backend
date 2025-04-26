@@ -61,7 +61,7 @@ app.get('/', (_req, res) => {
   res.send(`SAW API is running! Current server time: ${currentDate.toISOString()}`);
 }); 
 app.get('/api/health', (_req, res) => {
-  res.status(200).json({ status: 'ok1' });
+  res.status(200).json({ status: 'ok3' });
 });
 app.use('/api/test', testRoutes);
 // Make io available to the app

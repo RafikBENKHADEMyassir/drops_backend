@@ -21,7 +21,7 @@ const twilioClient = twilio(
   process.env.TWILIO_ACCOUNT_SID,
   process.env.TWILIO_AUTH_TOKEN
 );
-const TWILIO_WHATSAPP_NUMBER = process.env.TWILIO_WHATSAPP_NUMBER;
+// const TWILIO_WHATSAPP_NUMBER = process.env.TWILIO_WHATSAPP_NUMBER;
 
 // Generate a random 6-digit OTP
 function generateOTP(): string {
@@ -128,11 +128,11 @@ router.post(
       // Send message via chosen channel (WhatsApp or SMS)
 
         // Send via SMS
-        // await twilioClient.messages.create({
-        //   from: process.env.TWILIO_PHONE_NUMBER || '',
-        //   body: message,
-        //   to: phone
-        // });
+        await twilioClient.messages.create({
+          from: process.env.TWILIO_PHONE_NUMBER || '',
+          body: message,
+          to: phone
+        });
       
 
       res.json({
@@ -587,28 +587,27 @@ router.post('/complete-profile', authenticateUser, async (req: Request, res: Res
 // Add update profile endpoint without image
 router.put('/profile', authenticateUser, async (req: Request, res: Response): Promise<void> => {
   try {
-    const { firstName, lastName, email, phone } = req.body;
+    const { firstName, lastName, email, name } = req.body;
     
     // Validate required fields
-    if (!firstName || !lastName) {
+    if (!name) {
       res.status(400).json({ 
-        message: 'First name and last name are required',
+        message: 'Username is required',
         success: false 
       });
       return;
     }
 
     const updateData: any = {
-      firstName,
-      lastName,
-      name: `${firstName} ${lastName}`,
+      name,
       updatedAt: new Date(),
     };
 
     // Add optional fields if provided
-    // if (email) updateData.email = email;
+    if (email) updateData.email = email;
     // if (phone) updateData.phone = phone;
-
+    if(firstName) updateData.firstName = firstName;
+    if(lastName) updateData.lastName = lastName;
     // Update user profile
     const updatedUser = await prisma.user.update({
       where: { id: req.user?.userId },
@@ -994,8 +993,8 @@ router.post('/apple-signin',
         res.status(400).json({ errors: errors.array(), success: false });
         return;
       }
-
-      const { identityToken, userData } = req.body;
+      const {  userData } = req.body;
+      // const { identityToken, userData } = req.body;
       
       // Verify the Apple ID token (important in production)
       // In a production environment, uncomment and implement this:
@@ -1143,8 +1142,9 @@ router.post('/google-signin',
         return;
       }
 
-      const { idToken, accessToken, email, displayName, photoUrl } = req.body;
-      
+      // const { idToken, accessToken, email, displayName, photoUrl } = req.body;
+      const { email, displayName, photoUrl } = req.body;
+
       //  production, verify the Google ID token
       // This would use the idToken to verify authenticity with Google
       /*

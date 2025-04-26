@@ -1,6 +1,6 @@
 import express from 'express';
 import { Request, Response } from 'express';
-import { authenticateUser } from "../middleware/authMiddleware";
+// import { authenticateUser } from "../middleware/authMiddleware";
 import emailService from '../services/emailService';
 
 const router = express.Router();
@@ -9,7 +9,7 @@ const router = express.Router();
  * Test endpoint to send a test email
  * Protected by authentication to prevent abuse
  */
-router.post('/send-test-email', async (req: Request, res: Response): Promise<void> => {
+router.post('/send-test-email', async (_req: Request, res: Response): Promise<void> => {
   try {
     const recipient = 'rafik.benkhadem@gmail.com';
     const subject = 'Test Email from Drops App';
