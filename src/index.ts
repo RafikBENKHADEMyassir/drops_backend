@@ -15,6 +15,8 @@ import postalDropRoutes from './routes/postal-drop.routes';
 import qrCodeRoutes from './routes/qr-code.routes';
 import orderRoutes from './routes/order.routes';
 import mediaUploadRoutes from './routes/media-upload.routes';
+import notificationRoutes from './routes/notification';  
+import testRoutes from './routes/test';
 dotenv.config();
 const app = express();
 
@@ -51,6 +53,7 @@ app.use("/uploads", express.static(path.join(__dirname, "../uploads")));
 app.use('/api/orders/webhook', express.raw({ type: 'application/json' }));
 // app.use('/uploads', express.static('uploads'));
 app.use('/api/upload', mediaUploadRoutes);
+app.use('/api/notifications',notificationRoutes);
 // 
 // Health Check
 app.get('/', (_req, res) => {
@@ -60,6 +63,7 @@ app.get('/', (_req, res) => {
 app.get('/api/health', (_req, res) => {
   res.status(200).json({ status: 'ok1' });
 });
+app.use('/api/test', testRoutes);
 // Make io available to the app
 app.set('io', io);
 

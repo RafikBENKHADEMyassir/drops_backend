@@ -3,6 +3,7 @@ import { PrismaClient } from "@prisma/client";
 import { authenticateUser } from "../middleware/authMiddleware";
 import { dropUpload } from "../middleware/uploadMiddleware";
 import { body, validationResult } from 'express-validator';
+import notificationService from "../services/notificationService";
 
 const router = express.Router();
 const prisma = new PrismaClient();
@@ -76,7 +77,7 @@ router.post('/',  [authenticateUser, dropUpload,
             friendId: { in: sharedWithIds },
           },
         });
-
+    
         const validFriendIds = friends.map(f => f.friendId);
         
         // Create sharing records for valid friends with isLocked=true
@@ -87,7 +88,94 @@ router.post('/',  [authenticateUser, dropUpload,
             isLocked: true, // Start locked by default
           })),
         });
+        
+        // Get user info for notifications
+        const currentUser = await tx.user.findUnique({
+          where: { id: req.user?.userId! },
+          select: { name: true, firstName: true, profile_image_url: true }
+        });
+        
+        const senderName = currentUser?.name || currentUser?.firstName || 'Someone';
+        
+        // Process each friend: create conversation, add message and send notification
+        for (const friendId of validFriendIds) {
+          // 1. Find existing conversation or create new one
+          let conversation = await tx.conversation.findFirst({
+            where: {
+              AND: [
+                { participants: { some: { userId: req.user?.userId! } } },
+                { participants: { some: { userId: friendId } } }
+              ]
+            }
+          });
+          
+          if (!conversation) {
+            // Create a new conversation between the two users
+            conversation = await tx.conversation.create({
+              data: {
+                name: null, // Direct message has no name
+                // isGroup: false,
+                createdAt: new Date(),
+                updatedAt: new Date(),
+                participants: {
+                  create: [
+                    { userId: req.user?.userId! },
+                    { userId: friendId }
+                  ]
+                }
+              }
+            });
+          }
+          
+          // 2. Add message about the drop in the conversation
+          await tx.message.create({
+            data: {
+              conversationId: conversation.id,
+              senderId: req.user?.userId!,
+              content: `I shared a Drop with you: "${title}"`,
+              createdAt: new Date(),
+              status: 'sent', // Add the required status field
+              data: {
+                dropId: newDrop.id,
+                dropType: type,
+                dropTitle: title
+              }
+            }
+          });
+          
+          // 3. Send notification to friend
+          await tx.notification.create({
+            data: {
+              userId: friendId,
+              title: `${senderName} shared a Drop with you`,
+              body: `${title} - Find it nearby to unlock!`,
+              type: 'dropShared',
+              data: {
+                dropId: newDrop.id,
+                senderId: req.user?.userId!,
+                dropType: type
+              }
+            }
+          });
+        }
+        
+        // Send push notifications via Firebase (outside transaction to prevent rollback issues)
+        setTimeout(async () => {
+          try {
+            for (const friendId of validFriendIds) {
+              await notificationService.sendDropSharedNotification(
+                newDrop.id,
+                req.user?.userId!,
+                friendId,
+                title
+              );
+            }
+          } catch (notifError) {
+            console.error('Error sending notifications:', notifError);
+          }
+        }, 0);
       }
+      
       return newDrop;
     });
     

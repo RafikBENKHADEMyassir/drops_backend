@@ -127,7 +127,7 @@ router.post(
       
       // Send message via chosen channel (WhatsApp or SMS)
 
-        // Send via SMS (fallback)
+        // Send via SMS
         // await twilioClient.messages.create({
         //   from: process.env.TWILIO_PHONE_NUMBER || '',
         //   body: message,
@@ -473,6 +473,7 @@ router.get('/profile', authenticateUser, async (req: Request, res: Response): Pr
         phone: true,
         isEmailVerified: true,
         isPhoneVerified: true,
+        isProfileComplete: true,
         createdAt: true,
         updatedAt: true,
       }
@@ -492,9 +493,9 @@ router.get('/profile', authenticateUser, async (req: Request, res: Response): Pr
         lastName: user.lastName || undefined,
         profileImageUrl: user.profile_image_url || undefined,
         phone: user.phone || undefined,
-        isProfileComplete: Boolean(user.name && user.email),
         isEmailVerified: user.isEmailVerified,
         isPhoneVerified: user.isPhoneVerified,
+        isProfileComplete: user.isProfileComplete,
         createdAt: user.createdAt,
         updatedAt: user.updatedAt,
       },
@@ -529,6 +530,8 @@ router.post('/complete-profile', authenticateUser, async (req: Request, res: Res
         name: name,//`${firstName} ${lastName}`,
         updatedAt: new Date(),
         isProfileComplete: true,
+        isEmailVerified: true,
+        isPhoneVerified: true
       };
 
       // Add profile image if uploaded

@@ -133,6 +133,7 @@ model Message {
   content         String
   attachmentUrl   String?
   attachmentType  String?
+  data            Json?  
   status          String       // "sending", "sent", "delivered", "read", "failed"
   createdAt       DateTime     @default(now())
   updatedAt       DateTime     @updatedAt
