@@ -153,7 +153,8 @@ router.post('/',  [authenticateUser, dropUpload,
               data: {
                 dropId: newDrop.id,
                 senderId: req.user?.userId!,
-                dropType: type
+                dropType: type,
+                isLocked: true
               }
             }
           });

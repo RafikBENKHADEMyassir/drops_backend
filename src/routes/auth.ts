@@ -606,8 +606,8 @@ router.put('/profile', authenticateUser, async (req: Request, res: Response): Pr
     };
 
     // Add optional fields if provided
-    if (email) updateData.email = email;
-    if (phone) updateData.phone = phone;
+    // if (email) updateData.email = email;
+    // if (phone) updateData.phone = phone;
 
     // Update user profile
     const updatedUser = await prisma.user.update({
@@ -1003,7 +1003,7 @@ router.post('/apple-signin',
       try {
         const decodedToken = await verifyAppleToken(identityToken);
         // Verify audience, issuer, expiration, etc.
-        if (decodedToken.aud !== 'your.app.bundle.id') {
+        if (decodedToken.aud !== 'com.mycompany.dropss') {
           throw new Error('Invalid audience');
         }
       } catch (verifyError) {
@@ -1130,6 +1130,163 @@ router.post('/apple-signin',
   }
 );
 
+router.post('/google-signin',
+  [
+    body('idToken').notEmpty().withMessage('ID token is required'),
+    body('email').isEmail().withMessage('Email is required'),
+  ],
+  async (req: Request, res: Response): Promise<void> => {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        res.status(400).json({ errors: errors.array(), success: false });
+        return;
+      }
+
+      const { idToken, accessToken, email, displayName, photoUrl } = req.body;
+      
+      //  production, verify the Google ID token
+      // This would use the idToken to verify authenticity with Google
+      /*
+      const CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
+      try {
+        const ticket = await new OAuth2Client(CLIENT_ID).verifyIdToken({
+          idToken,
+          audience: CLIENT_ID
+        });
+        const payload = ticket.getPayload();
+        if (!payload) {
+          throw new Error('Empty payload');
+        }
+      } catch (verifyError) {
+        res.status(401).json({
+          success: false,
+          message: 'Invalid Google ID token'
+        });
+        return;
+      }
+      */
+      
+      // Extract user information from the request
+      if (!email) {
+        res.status(400).json({
+          success: false,
+          message: 'Email is required for Google sign-in'
+        });
+        return;
+      }
+
+      // Parse name components (best effort)
+      let firstName = '';
+      let lastName = '';
+      
+      if (displayName) {
+        const nameParts = displayName.split(' ');
+        if (nameParts.length >= 2) {
+          firstName = nameParts[0];
+          lastName = nameParts.slice(1).join(' ');
+        } else {
+          firstName = displayName;
+        }
+      }
+
+      // Use the email as a unique identifier for Google accounts
+      const providerId = email.toLowerCase();
+
+      // Check if user already exists by Google provider ID
+      let user = await prisma.user.findFirst({
+        where: {
+          AND: [
+            { authProvider: 'google' },
+            { providerId: providerId }
+          ]
+        }
+      });
+
+      // If not found by provider ID, try to find by email
+      if (!user) {
+        user = await prisma.user.findUnique({
+          where: { email: email.toLowerCase() }
+        });
+      }
+
+      if (user) {
+        // Update existing user's info
+        user = await prisma.user.update({
+          where: { id: user.id },
+          data: {
+            authProvider: 'google',
+            providerId: providerId,
+            // Only update fields if they're empty or if we have better data
+            ...(!user.name && displayName ? { name: displayName } : {}),
+            ...(!user.firstName && firstName ? { firstName } : {}),
+            ...(!user.lastName && lastName ? { lastName } : {}),
+            ...(!user.profile_image_url && photoUrl ? { profile_image_url: photoUrl } : {}),
+            // Google emails are verified
+            isEmailVerified: true,
+            isProfileComplete:true,
+            updatedAt: new Date()
+          }
+        });
+      } else {
+        // Create new user for first-time Google sign-in
+        const isProfileComplete = Boolean(displayName);
+        
+        // Generate a random secure password (user won't use it)
+        const password = await bcrypt.hash(crypto.randomBytes(16).toString('hex'), 10);
+        
+        user = await prisma.user.create({
+          data: {
+            email: email.toLowerCase(),
+            password,
+            name: displayName || email.split('@')[0],
+            firstName,
+            lastName,
+            profile_image_url: photoUrl || null,
+            authProvider: 'google',
+            providerId: providerId,
+            isEmailVerified: true, // Google emails are verified
+            isPhoneVerified: false,
+            isProfileComplete,
+            createdAt: new Date(),
+            updatedAt: new Date()
+          }
+        });
+      }
+
+      // Generate JWT token
+      const token = jwt.sign({ userId: user.id }, JWT_SECRET, { expiresIn: '7d' });
+      
+      // Determine if user needs to complete their profile
+      const needsProfileCompletion = !user.name || (!user.firstName && !user.lastName);
+
+      const response: AuthResponse = {
+        token,
+        user: {
+          id: user.id,
+          email: user.email,
+          name: user.name || '',
+          firstName: user.firstName || undefined,
+          lastName: user.lastName || undefined,
+          phone: user.phone || undefined,
+          profileImageUrl: user.profile_image_url || undefined,
+          isProfileComplete: !needsProfileCompletion,
+          isEmailVerified: user.isEmailVerified || false,
+          isPhoneVerified: user.isPhoneVerified || false
+        },
+        success: true
+      };
+
+      res.json(response);
+    } catch (error) {
+      console.error("Error in Google authentication:", error);
+      res.status(500).json({
+        success: false,
+        message: 'Server error: ' + (error instanceof Error ? error.message : String(error))
+      });
+    }
+  }
+);
 
 // router.post('/social-auth',
 //   [

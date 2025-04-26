@@ -139,6 +139,7 @@ class NotificationService {
       };
       
       // Send the notification
+      console.log(`Sending notification to ${message} devices...`);
       const response = await admin.messaging().sendEachForMulticast(message);
       console.log(`Notification sent to ${response.successCount} devices`);
       
@@ -317,6 +318,41 @@ async sendDropSharedNotification(
       'dropShared'
     );
   }
+  async sendFriendRequestAcceptedNotification(
+    accepterId: string,
+    senderId: string
+  ): Promise<void> {
+    // Get accepter details
+    const accepter = await prisma.user.findUnique({
+      where: { id: accepterId },
+      select: {
+        name: true,
+        firstName: true,
+        profile_image_url: true
+      }
+    });
+    
+    if (!accepter) return;
+    
+    const accepterName = accepter.name || accepter.firstName || 'Someone';
+    
+    await this.sendToUser(
+      senderId,
+      {
+        title: 'Friend Request Accepted',
+        body: `${accepterName} accepted your friend request`,
+        imageUrl: accepter.profile_image_url || undefined,
+        data: {
+          friendId: accepterId,
+          type: 'friendAccepted',
+          action: 'viewProfile'
+        }
+      },
+      'friendAccepted'
+    );
+  }
 }
+
+
 
 export default new NotificationService();

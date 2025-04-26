@@ -369,24 +369,39 @@ router.get('/test-push-notification',
   async (_req: Request, res: Response): Promise<void> => {
     try {
       const userId = "59e572f2-2dbb-4e74-8a1e-0af47986ab7d";
-      // const userId = 'test-user-id'; // Replace with actual test user ID
-      const notificationPayload = {
+      const devices = await prisma.device.findMany({
+        where: { 
+          userId,
+          isActive: true 
+        }
+      });
+      const deviceCount = devices.length;
+
+            const notificationPayload = {
         title: 'Test Notification',
-        body: 'This is a test notification'
+        body: 'This is a test notification',
+        data: {
+          testKey: 'testValue',
+          timestamp: Date.now().toString()
+        }
       };
-      
+      console.log(`Attempting to send notification to ${deviceCount} devices for user ${userId}`);
+
       // Call the notification service to send the notification
       await notificationService.sendToUser(userId, notificationPayload, 'test');
       
       res.json({
         success: true,
-        message: 'Test push notification sent successfully'
+        message: 'Test push notification sent successfully',
+        deviceCount,
+        sentAt: new Date().toISOString()
       });
     } catch (error) {
       console.error('Error sending test push notification:', error);
       res.status(500).json({
         success: false,
-        message: 'Failed to send test push notification'
+        message: 'Failed to send test push notification',
+        error: error instanceof Error ? error.message : String(error)
       });
     }
   }

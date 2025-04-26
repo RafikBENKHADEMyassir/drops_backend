@@ -3,6 +3,7 @@ import express from 'express';
 import { PrismaClient } from '@prisma/client';
 import { Request, Response } from 'express';
 import { authenticateUser } from "../middleware/authMiddleware";
+import notificationService from '../services/notificationService';
 
 const router = express.Router();
 const prisma = new PrismaClient();
@@ -202,7 +203,7 @@ router.get('/', authenticateUser, async (req: Request, res: Response) => {
     if (!recipientId) {
       console.error('Recipient ID is required',req.body);
       res.status(400).json({ message: 'Recipient ID is required' });
-      return; // Ensure the function exits here
+      return;
     }
   
     try {
@@ -213,7 +214,7 @@ router.get('/', authenticateUser, async (req: Request, res: Response) => {
   
       if (!recipient) {
         res.status(404).json({ message: 'Recipient not found' });
-        return; // Ensure the function exits here
+        return;
       }
   
       // Check if a friend request already exists
@@ -226,7 +227,7 @@ router.get('/', authenticateUser, async (req: Request, res: Response) => {
   
       if (existingRequest) {
         res.status(400).json({ message: 'Friend request already sent' });
-        return; // Ensure the function exits here
+        return;
       }
   
       // Create the friend request
@@ -234,10 +235,30 @@ router.get('/', authenticateUser, async (req: Request, res: Response) => {
         data: {
           senderId: req.user?.userId!,
           recipientId,
-          status: 'pending', // Default status
+          status: 'pending',
         },
       });
-  
+      const sender = await prisma.user.findUnique({
+        where: { id: req.user?.userId! },
+        select: {
+          name: true,
+          firstName: true,
+          profile_image_url: true
+        }
+      });
+
+      setTimeout(async () => {
+        try {
+          await notificationService.sendFriendRequestNotification(
+            friendRequest.id,
+            req.user?.userId!,
+            recipientId
+          );
+        } catch (notifError) {
+          console.error('Error sending friend request notification:', notifError);
+        }
+      }, 0);
+
       res.status(201).json({ message: 'Friend request sent', friendRequest });
     } catch (error) {
       console.error('Error sending friend invite:', error);
@@ -363,7 +384,20 @@ router.post('/block', authenticateUser, async (req: Request, res: Response): Pro
         res.status(404).json({ message: 'Friend request not found' });
         return;
       }
-  
+      const [recipient, sender] = await Promise.all([
+        prisma.user.findUnique({
+          where: { id: req.user?.userId },
+          select: { name: true, firstName: true, profile_image_url: true }
+        }),
+        prisma.user.findUnique({
+          where: { id: friendRequest.senderId },
+          select: { id: true } // Just to verify the user exists
+        })
+      ]);
+      if (!sender) {
+        res.status(404).json({ message: 'Sender not found' });
+        return;
+      }
       // Create a friendship
       await prisma.friend.createMany({
         data: [
@@ -376,7 +410,34 @@ router.post('/block', authenticateUser, async (req: Request, res: Response): Pro
       await prisma.friendRequest.delete({
         where: { id: requestId },
       });
-  
+      // Send notification to friend request sender
+      const recipientName = recipient?.name || recipient?.firstName || 'Someone';
+    
+      // Send notification outside the main execution path
+      setTimeout(async () => {
+        try {
+          // Create and store a notification in the database
+          await prisma.notification.create({
+            data: {
+              userId: friendRequest.senderId,
+              title: 'Friend Request Accepted',
+              body: `${recipientName} accepted your friend request`,
+              type: 'friendRequestAccepted',
+              data: {
+                friendId: req.user?.userId,
+                action: 'viewProfile'
+              }
+            }
+          });
+          await notificationService.sendFriendRequestAcceptedNotification(
+            req.user?.userId!,
+            friendRequest.senderId
+          );
+        } catch (notifError) {
+          console.error('Error sending friend request acceptance notification:', notifError);
+          // Non-blocking error - the friendship is still created even if notification fails
+        }
+      }, 0);
       res.status(200).json({ message: 'Friend request accepted' });
     } catch (error) {
       console.error('Error accepting friend request:', error);

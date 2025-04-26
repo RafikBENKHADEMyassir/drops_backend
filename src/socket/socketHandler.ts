@@ -2,6 +2,7 @@ import { Server as SocketIOServer } from 'socket.io';
 import { Server as HTTPServer } from 'http';
 import jwt from 'jsonwebtoken';
 import { PrismaClient } from '@prisma/client';
+import notificationService from '../services/notificationService';
 
 const prisma = new PrismaClient();
 const JWT_SECRET = process.env.JWT_SECRET || "your_secret_key"; // Using same secret as in auth middleware
@@ -57,8 +58,6 @@ export const setupSocketIO = (server: HTTPServer) => {
     
     // Join user to their own room for private messages
     socket.join(`user:${socket.data.userId}`);
-
-    // ... rest of socket implementation
     
     // Join conversation
     socket.on('join_conversation', async (data) => {
@@ -100,7 +99,67 @@ export const setupSocketIO = (server: HTTPServer) => {
         connectedUsers.splice(index, 1);
       }
     });
+
+    socket.on('share_drop', async (data) => {
+      try {
+        const { receiverId, dropId, dropTitle } = data;
+    
+        // Check if a conversation exists between the sender and receiver
+        let conversation = await prisma.conversation.findFirst({
+          where: {
+            AND: [
+              { participants: { some: { userId: socket.data.userId } } },
+              { participants: { some: { userId: receiverId } } },
+            ],
+          },
+        });
+    
+        // If no conversation exists, create one
+        if (!conversation) {
+          conversation = await prisma.conversation.create({
+            data: {
+              participants: {
+                create: [
+                  { userId: socket.data.userId },
+                  { userId: receiverId },
+                ],
+              },
+            },
+          });
+        }
+    
+        // Add a message about the shared drop
+        const message = await prisma.message.create({
+          data: {
+            conversationId: conversation.id,
+            senderId: socket.data.userId,
+            content: `I shared a Drop with you: "${dropTitle}"`,
+            data: { dropId, dropTitle, type: 'dropShared', isLocked: true },
+            status: 'sent',
+          },
+        });
+    
+        // Notify the receiver in real-time
+        io.to(`user:${receiverId}`).emit('new_message', message);
+    
+        // Send a push notification to the receiver
+        const sender = await prisma.user.findUnique({
+          where: { id: socket.data.userId },
+          select: { name: true },
+        });
+        await notificationService.sendDropSharedNotification(
+          dropId,
+          socket.data.userId,
+          receiverId,
+          dropTitle
+        );
+      } catch (error) {
+        console.error('Error sharing drop:', error);
+        socket.emit('error', { message: 'Failed to share drop' });
+      }
+    });
   });
+
 
   return io;
 };
