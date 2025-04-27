@@ -774,7 +774,71 @@ type SharedWithItem = {
   };
   createdAt: Date;
 };
-
+// Get drop by id
+router.get('/:id', authenticateUser, async (req: Request, res: Response): Promise<void> => {
+  try {
+    const dropId = req.params.id;
+    const userId = req.user?.userId;
+    
+    // Find the drop with all necessary details
+    const drop = await prisma.drop.findUnique({
+      where: { id: dropId },
+      include: {
+        sharedWith: {
+          include: {
+            friend: {
+              select: {
+                id: true,
+                name: true,
+                profile_image_url: true,
+              },
+            },
+          },
+        },
+        user: {
+          select: {
+            id: true,
+            name: true,
+            profile_image_url: true,
+          },
+        },
+      }
+    });
+    
+    // If drop doesn't exist, return 404
+    if (!drop) {
+      res.status(404).json({ message: 'Drop not found' });
+      return;
+    }
+    
+    // Check authorization:
+    // - User must be either the owner of the drop
+    // - Or a friend who the drop was shared with
+    const isOwner = drop.userId === userId;
+    const isSharedWithUser = drop.sharedWith.some(share => share.friendId === userId);
+    
+    if (!isOwner && !isSharedWithUser) {
+      res.status(403).json({ message: 'Not authorized to view this drop' });
+      return;
+    }
+    
+    // If user is not the owner, check if the drop is locked
+    let isLocked = false;
+    
+    if (!isOwner) {
+      const sharedDrop = drop.sharedWith.find(share => share.friendId === userId);
+      isLocked = sharedDrop ? !!sharedDrop.isLocked : false;
+    }
+    
+    // Format the drop response
+    const formattedDrop = formatDrop(drop, isLocked);
+    
+    res.json(formattedDrop);
+  } catch (error) {
+    console.error('Error fetching drop by ID:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
 function formatDrop(drop: any, isLocked: boolean) {
   return {
     id: drop.id,
