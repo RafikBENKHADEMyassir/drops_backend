@@ -259,6 +259,7 @@ export default class ChatService {
                    `${message.sender.firstName || ''} ${message.sender.lastName || ''}`.trim(),
         senderAvatar: message.sender.profile_image_url,
         content: message.content,
+        data: message.data ? (typeof message.data === 'object' ? message.data : JSON.parse(message.data as any)) : null,
         attachmentUrl: message.attachmentUrl,
         attachmentType: message.attachmentType,
         status: message.status,

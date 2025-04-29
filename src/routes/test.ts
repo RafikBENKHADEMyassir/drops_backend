@@ -50,5 +50,39 @@ router.post('/send-test-email', async (_req: Request, res: Response): Promise<vo
     });
   }
 });
+router.get('/send-test-message', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { conversationId, senderId, content } = req.query;
 
+    if (!conversationId || !senderId || !content) {
+       res.status(400).json({ success: false, message: 'conversationId, senderId, and content are required as query params' });
+    }
+
+    // Access io instance from app (set in index.ts)
+    const io = req.app.get('io');
+    if (!io) {
+       res.status(500).json({ success: false, message: 'Socket server not initialized' });
+    }
+
+    // Emit a test message event to all users in the conversation room
+    io.to(`conversation:${conversationId}`).emit('new_message', {
+      id: 'test-id',
+      conversationId,
+      senderId,
+      senderName: 'Test User',
+      senderAvatar: null,
+      content,
+      status: 'sent',
+      isDeleted: false,
+      timestamp: new Date().toISOString(),
+      readBy: [],
+      data: {},
+      test: true
+    });
+
+    res.json({ success: true, message: 'Test message sent via socket', conversationId, senderId, content });
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Failed to send test message', error: error instanceof Error ? error.message : String(error) });
+  }
+});
 export default router;

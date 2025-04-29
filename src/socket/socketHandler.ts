@@ -87,7 +87,6 @@ export const setupSocketIO = (server: HTTPServer) => {
       }
     });
 
-    // Rest of the socket event handlers...
 
     // Disconnect event
     socket.on('disconnect', () => {
@@ -158,6 +157,80 @@ export const setupSocketIO = (server: HTTPServer) => {
         socket.emit('error', { message: 'Failed to share drop' });
       }
     });
+  
+    socket.on('send_message', async (data) => {
+      console.log('Received message:', data);
+      try {
+        const { conversationId, content, attachment } = data;
+        const senderId = socket.data.userId;
+  
+        // 1. Validate participant
+        const participant = await prisma.participant.findUnique({
+          where: {
+            userId_conversationId: {
+              userId: senderId,
+              conversationId
+            }
+          }
+        });
+        if (!participant) {
+          socket.emit('error', { message: 'You are not a member of this conversation' });
+          return;
+        }
+  
+        // 2. Save message to DB
+        const message = await prisma.message.create({
+          data: {
+            conversationId,
+            senderId,
+            content,
+            attachmentUrl: attachment?.url,
+            attachmentType: attachment?.type,
+            status: 'sent'
+          },
+          include: {
+            sender: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                name: true,
+                profile_image_url: true,
+              }
+            }
+          }
+        });
+  
+        // 3. Emit to all users in the conversation room
+        io.to(`conversation:${conversationId}`).emit('new_message', {
+          id: message.id,
+          conversationId: message.conversationId,
+          senderId: message.senderId,
+          senderName: message.sender.name || `${message.sender.firstName || ''} ${message.sender.lastName || ''}`.trim(),
+          senderAvatar: message.sender.profile_image_url,
+          content: message.content,
+          attachmentUrl: message.attachmentUrl,
+          attachmentType: message.attachmentType,
+          status: message.status,
+          isDeleted: message.isDeleted,
+          timestamp: message.createdAt,
+          readBy: [],
+          data: message.data ? (typeof message.data === 'object' ? message.data : JSON.parse(message.data as any)) : null,
+        });
+  
+        notificationService.sendMessageNotification(
+          message.id,
+          senderId,
+          conversationId,
+          content,
+        );
+  
+      } catch (error) {
+        console.error('Error sending message:', error);
+        socket.emit('error', { message: 'Failed to send message' });
+      }
+    });
+  
   });
 
 
