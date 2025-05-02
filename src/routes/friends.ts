@@ -391,7 +391,7 @@ router.post('/block', authenticateUser, async (req: Request, res: Response): Pro
         }),
         prisma.user.findUnique({
           where: { id: friendRequest.senderId },
-          select: { id: true } // Just to verify the user exists
+          select: { id: true, name: true, profile_image_url: true }
         })
       ]);
       if (!sender) {
@@ -410,34 +410,29 @@ router.post('/block', authenticateUser, async (req: Request, res: Response): Pro
       await prisma.friendRequest.delete({
         where: { id: requestId },
       });
+  
       // Send notification to friend request sender
       const recipientName = recipient?.name || recipient?.firstName || 'Someone';
-    
-      // Send notification outside the main execution path
+  
       setTimeout(async () => {
         try {
-          // Create and store a notification in the database
-          await prisma.notification.create({
-            data: {
-              userId: friendRequest.senderId,
+          await notificationService.sendToUser(
+            friendRequest.senderId,
+            {
               title: 'Friend Request Accepted',
               body: `${recipientName} accepted your friend request`,
-              type: 'friendRequestAccepted',
               data: {
-                friendId: req.user?.userId,
+                // friendId: req.user?.userId,
                 action: 'viewProfile'
               }
-            }
-          });
-          await notificationService.sendFriendRequestAcceptedNotification(
-            req.user?.userId!,
-            friendRequest.senderId
+            },
+            'friendRequestAccepted'
           );
         } catch (notifError) {
           console.error('Error sending friend request acceptance notification:', notifError);
-          // Non-blocking error - the friendship is still created even if notification fails
         }
       }, 0);
+  
       res.status(200).json({ message: 'Friend request accepted' });
     } catch (error) {
       console.error('Error accepting friend request:', error);

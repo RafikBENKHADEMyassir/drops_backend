@@ -204,7 +204,7 @@ export const setupSocketIO = (server: HTTPServer) => {
           where: { conversationId },
           select: { userId: true }
         });
-        const recipientIds = participants.map(p => p.userId);
+        const recipientIds = participants.map(p => p.userId !== userId ? p.userId : null).filter(id => id !== null) as string[];
     
         // 4. Emit to all users in the conversation room
         io.to(`conversation:${conversationId}`).emit('new_message', {

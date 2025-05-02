@@ -78,7 +78,7 @@ export default class ChatService {
             timestamp: conversation.messages[0].createdAt,
             status: conversation.messages[0].status
           } : null,
-          unreadCount,
+          unreadCount: conversation.messages.length > 0 ? unreadCount :null,
           createdAt: conversation.createdAt,
           updatedAt: conversation.updatedAt
         };

@@ -161,7 +161,10 @@ export default class ChatController {
       }
       
       const message = await chatService.sendMessage(id, userId, content, attachment);
-      
+      const io = req.app.get('io');
+      if (io) {
+        io.to(`conversation:${id}`).emit('new_message', message);
+      }
       return res.status(201).json({  // Added return here for consistency
         success: true,
         message

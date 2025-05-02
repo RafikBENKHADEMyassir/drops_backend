@@ -358,8 +358,8 @@ router.post('/:id/unlock', authenticateUser, async (req: Request, res: Response)
   const { lat, lng } = req.body;
 
   try {
-    // Require coordinates in production
-    if ( typeof lat !== 'number' || typeof lng !== 'number') {
+    // Require coordinates
+    if (typeof lat !== 'number' || typeof lng !== 'number') {
       res.status(400).json({ message: 'Your location is required to unlock the drop.' });
       return;
     }
@@ -406,29 +406,28 @@ router.post('/:id/unlock', authenticateUser, async (req: Request, res: Response)
       return;
     }
 
-      // Extract drop location
-      const dropLocation = extractLocation(drop.location);
-      if (!dropLocation) {
-        res.status(400).json({ message: 'Invalid drop location format' });
-        return;
-      }
-      const userLat = typeof lat === 'string' ? parseFloat(lat) : lat;
-      const userLng = typeof lng === 'string' ? parseFloat(lng) : lng;
-      const dropLat = dropLocation.lat;
-      const dropLng = dropLocation.lng;
-      const distance = calculateDistance(userLat, userLng, dropLat, dropLng);
-      const unlockRadius = 0.1; // 100 meters
+    // Extract drop location
+    const dropLocation = extractLocation(drop.location);
+    if (!dropLocation) {
+      res.status(400).json({ message: 'Invalid drop location format' });
+      return;
+    }
+    const userLat = typeof lat === 'string' ? parseFloat(lat) : lat;
+    const userLng = typeof lng === 'string' ? parseFloat(lng) : lng;
+    const dropLat = dropLocation.lat;
+    const dropLng = dropLocation.lng;
+    const distance = calculateDistance(userLat, userLng, dropLat, dropLng);
+    const unlockRadius = 0.1; // 100 meters
 
-      if (distance > unlockRadius) {
-        res.status(403).json({
-          message: `You need to be within ${Math.round(unlockRadius * 1000)}m to unlock. You are ${Math.round(distance * 1000)}m away.`,
-          isLocked: true,
-          distance: Math.round(distance * 1000),
-          requiredDistance: Math.round(unlockRadius * 1000)
-        });
-        return;
-      }
-    
+    if (distance > unlockRadius) {
+      res.status(403).json({
+        message: `You need to be within ${Math.round(unlockRadius * 1000)}m to unlock. You are ${Math.round(distance * 1000)}m away.`,
+        isLocked: true,
+        distance: Math.round(distance * 1000),
+        requiredDistance: Math.round(unlockRadius * 1000)
+      });
+      return;
+    }
 
     // Unlock for this user
     await prisma.sharedDrop.update({
@@ -438,6 +437,31 @@ router.post('/:id/unlock', authenticateUser, async (req: Request, res: Response)
         unlockedAt: new Date()
       }
     });
+
+    // Send notification to drop creator
+    try {
+      const friendUser = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { name: true, firstName: true }
+      });
+      const friendName = friendUser?.name || friendUser?.firstName || 'Your friend';
+
+      await notificationService.sendToUser(
+        drop.userId,
+        {
+          title: 'Drop Unlocked!',
+          body: `${friendName} unlocked your drop "${drop.title}"`,
+          data: {
+            dropId: drop.id,
+            action: 'dropUnlocked'
+          }
+        },
+        'dropUnlocked'
+      );
+    } catch (notifError) {
+      console.error('Error sending unlock notification:', notifError);
+      // Don't block unlock on notification failure
+    }
 
     // Return unlocked drop
     const formattedDrop = formatDrop(drop, false);
@@ -986,30 +1010,50 @@ router.get('/:id', authenticateUser, async (req: Request, res: Response): Promis
     res.status(500).json({ message: 'Server error' });
   }
 });
-function formatDrop(drop: any, isLocked: boolean) {
+function formatDrop(drop: any, isLocked: boolean, userId?: string) {
+  // Determine ownership and sharing
+  const isOwner = drop.userId === userId;
+  // Find sharedDrop for this user if available
+  const sharedDrop = Array.isArray(drop.sharedWith)
+    ? drop.sharedWith.find((share: any) => share.friendId === userId)
+    : undefined;
+
+  // Compute isUnlocked and isLocked for shared drops
+  let isUnlocked = true;
+  let isLockedFinal = false;
+  if (!isOwner && sharedDrop) {
+    isUnlocked = !sharedDrop.isLocked;
+    isLockedFinal = sharedDrop.isLocked;
+  } else if (!isOwner && !sharedDrop) {
+    isUnlocked = false;
+    isLockedFinal = true;
+  }
+
   return {
     id: drop.id,
     title: drop.title,
-    description: drop.content,
+    description: (isOwner || isUnlocked) ? drop.content : null,
     createdAt: drop.createdAt.toISOString(),
     type: drop.type.toLowerCase(),
     creatorId: drop.userId,
-    sharedWithUserIds: drop.sharedWith?.map((share: SharedWithItem) => share.friend?.id) || [],
-    imageUrl: drop.content.startsWith('/uploads/') ? drop.content : null,
+    sharedWithUserIds: drop.sharedWith?.map((share: any) => share.friend?.id || share.friendId) || [],
+    imageUrl: (isOwner || isUnlocked) && drop.content.startsWith('/uploads/') ? drop.content : null,
     metadata: {
-      location: isLocked ? null : drop.location, // Don't expose exact location if locked
+      location: (isOwner || isUnlocked) ? drop.location : null,
       creator: drop.user ? {
         id: drop.user.id,
         name: drop.user.name,
         profile_image_url: drop.user.profile_image_url,
       } : null,
-      sharedWith: drop.sharedWith?.map((share: SharedWithItem) => ({
-        id: share.friend?.id,
+      sharedWith: drop.sharedWith?.map((share: any) => ({
+        id: share.friend?.id || share.friendId,
         name: share.friend?.name,
         profile_image_url: share.friend?.profile_image_url,
         sharedAt: share.createdAt,
       })) || [],
-      isLocked: isLocked
+      isUnlocked: isOwner ? true : isUnlocked,
+      isLocked: isOwner ? false : isLockedFinal,
+      isOwner: isOwner
     },
   };
 }
