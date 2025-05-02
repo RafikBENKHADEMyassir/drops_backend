@@ -227,47 +227,44 @@ class NotificationService {
    * Send a notification for a new message
    */
   async sendMessageNotification(
-    messageId: string,
-    senderId: string,
-    conversationId: string,
-    recipients: string[]
+    params: {
+      senderId: string,
+      conversationId: string,
+      recipients: string[],
+      senderName: string,
+      senderAvatar?: string,
+      content: string,
+      attachmentUrl?: string,
+      messageId: string
+    }
   ): Promise<void> {
-    // Get message and sender details
-    const [message, sender] = await Promise.all([
-      prisma.message.findUnique({
-        where: { id: messageId }
-      }),
-      prisma.user.findUnique({
-        where: { id: senderId },
-        select: {
-          name: true,
-          firstName: true,
-          profile_image_url: true
-        }
-      })
-    ]);
-    
-    if (!message || !sender) return;
-    
-    const senderName = sender.name || sender.firstName || 'Someone';
-    
-    // Don't send notification to the sender
-    const recipientsToNotify = recipients.filter(id => id !== senderId);
-    
+    const {
+      senderId,
+      conversationId,
+      recipients,
+      senderName,
+      senderAvatar,
+      content,
+      attachmentUrl,
+      messageId
+    } = params;
+  
+    // Don't notify the sender
+    const recipientsToNotify = recipients//.filter(id => id !== senderId);
+  
     // Truncate message content if too long
-    let contentPreview = message.content;
+    let contentPreview = content;
     if (contentPreview.length > 100) {
       contentPreview = contentPreview.substring(0, 97) + '...';
     }
-    
-    // Send to each recipient
+  
     for (const recipientId of recipientsToNotify) {
       await this.sendToUser(
         recipientId,
         {
           title: senderName,
-          body: message.attachmentUrl ? '📎 Attachment' : contentPreview,
-          imageUrl: sender.profile_image_url || undefined,
+          body: attachmentUrl ? '📎 Attachment' : contentPreview,
+          // imageUrl: senderAvatar,
           data: {
             conversationId,
             messageId,

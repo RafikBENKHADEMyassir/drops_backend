@@ -159,16 +159,14 @@ export const setupSocketIO = (server: HTTPServer) => {
     });
   
     socket.on('send_message', async (data) => {
-      console.log('Received message:', data);
       try {
-        const { conversationId, content, attachment } = data;
-        const senderId = socket.data.userId;
-  
+        const { conversationId, content, attachment, userId } = data;
+    
         // 1. Validate participant
         const participant = await prisma.participant.findUnique({
           where: {
             userId_conversationId: {
-              userId: senderId,
+              userId,
               conversationId
             }
           }
@@ -177,12 +175,12 @@ export const setupSocketIO = (server: HTTPServer) => {
           socket.emit('error', { message: 'You are not a member of this conversation' });
           return;
         }
-  
+    
         // 2. Save message to DB
         const message = await prisma.message.create({
           data: {
             conversationId,
-            senderId,
+            senderId: userId,
             content,
             attachmentUrl: attachment?.url,
             attachmentType: attachment?.type,
@@ -200,8 +198,15 @@ export const setupSocketIO = (server: HTTPServer) => {
             }
           }
         });
-  
-        // 3. Emit to all users in the conversation room
+    
+        // 3. Get all participant userIds for notification (except sender)
+        const participants = await prisma.participant.findMany({
+          where: { conversationId },
+          select: { userId: true }
+        });
+        const recipientIds = participants.map(p => p.userId);
+    
+        // 4. Emit to all users in the conversation room
         io.to(`conversation:${conversationId}`).emit('new_message', {
           id: message.id,
           conversationId: message.conversationId,
@@ -217,14 +222,19 @@ export const setupSocketIO = (server: HTTPServer) => {
           readBy: [],
           data: message.data ? (typeof message.data === 'object' ? message.data : JSON.parse(message.data as any)) : null,
         });
-  
-        notificationService.sendMessageNotification(
-          message.id,
-          senderId,
+    
+        // 5. Send push notification (no DB fetch, all data passed)
+        await notificationService.sendMessageNotification({
+          senderId: userId,
           conversationId,
+          recipients: recipientIds,
+          senderName: message.sender.name || `${message.sender.firstName || ''} ${message.sender.lastName || ''}`.trim(),
+          senderAvatar: message.sender.profile_image_url || undefined,
           content,
-        );
-  
+          attachmentUrl: attachment?.url,
+          messageId: message.id
+        });
+    
       } catch (error) {
         console.error('Error sending message:', error);
         socket.emit('error', { message: 'Failed to send message' });
