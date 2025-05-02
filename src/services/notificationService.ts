@@ -92,15 +92,15 @@ class NotificationService {
       }
       
       // Store notification in database
-       await prisma.notification.create({
-        data: {
-          userId,
-          title: payload.title,
-          body: payload.body,
-          data: payload.data || {},
-          type: notificationType
-        }
-      });
+      //  await prisma.notification.create({
+      //   data: {
+      //     userId,
+      //     title: payload.title,
+      //     body: payload.body,
+      //     data: payload.data || {},
+      //     type: notificationType
+      //   }
+      // });
       if (!admin.apps.length || !admin.messaging) {
         console.warn('Firebase Admin SDK not properly initialized. Notification saved to database but push notification not sent.');
         return;
