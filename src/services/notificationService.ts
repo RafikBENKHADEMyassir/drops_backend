@@ -251,7 +251,7 @@ class NotificationService {
   
     // Don't notify the sender
     const recipientsToNotify = recipients//.filter(id => id !== senderId);
-  
+  console.log('Recipients to notify:', senderAvatar);
     // Truncate message content if too long
     let contentPreview = content;
     if (contentPreview.length > 100) {

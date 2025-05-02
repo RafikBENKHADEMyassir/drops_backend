@@ -743,36 +743,36 @@ console.log('User ID:', userId);
 });
 
 // Helper function to generate an approximate location (removes precision)
-function generateApproximateLocation(location: any): any {
-  try {
-    if (Array.isArray(location) && location.length >= 2) {
-      const lat = typeof location[0] === 'string' ? parseFloat(location[0]) : location[0];
-      const lng = typeof location[1] === 'string' ? parseFloat(location[1]) : location[1];
+// function generateApproximateLocation(location: any): any {
+//   try {
+//     if (Array.isArray(location) && location.length >= 2) {
+//       const lat = typeof location[0] === 'string' ? parseFloat(location[0]) : location[0];
+//       const lng = typeof location[1] === 'string' ? parseFloat(location[1]) : location[1];
       
-      // Round to fewer decimal places to reduce precision (roughly ~100m)
-      const roundedLat = Math.round(lat * 100) / 100;
-      const roundedLng = Math.round(lng * 100) / 100;
+//       // Round to fewer decimal places to reduce precision (roughly ~100m)
+//       const roundedLat = Math.round(lat * 100) / 100;
+//       const roundedLng = Math.round(lng * 100) / 100;
       
-      return [roundedLat, roundedLng];
-    } else if (typeof location === 'object' && location !== null) {
-      const lat = location.lat || location.latitude;
-      const lng = location.lng || location.longitude;
+//       return [roundedLat, roundedLng];
+//     } else if (typeof location === 'object' && location !== null) {
+//       const lat = location.lat || location.latitude;
+//       const lng = location.lng || location.longitude;
       
-      if (typeof lat === 'number' && typeof lng === 'number') {
-        return {
-          ...(location.lat !== undefined ? { lat: Math.round(lat * 100) / 100 } : {}),
-          ...(location.latitude !== undefined ? { latitude: Math.round(lat * 100) / 100 } : {}),
-          ...(location.lng !== undefined ? { lng: Math.round(lng * 100) / 100 } : {}),
-          ...(location.longitude !== undefined ? { longitude: Math.round(lng * 100) / 100 } : {})
-        };
-      }
-    }
-    return location;
-  } catch (e) {
-    console.error('Error generating approximate location:', e);
-    return null;
-  }
-}
+//       if (typeof lat === 'number' && typeof lng === 'number') {
+//         return {
+//           ...(location.lat !== undefined ? { lat: Math.round(lat * 100) / 100 } : {}),
+//           ...(location.latitude !== undefined ? { latitude: Math.round(lat * 100) / 100 } : {}),
+//           ...(location.lng !== undefined ? { lng: Math.round(lng * 100) / 100 } : {}),
+//           ...(location.longitude !== undefined ? { longitude: Math.round(lng * 100) / 100 } : {})
+//         };
+//       }
+//     }
+//     return location;
+//   } catch (e) {
+//     console.error('Error generating approximate location:', e);
+//     return null;
+//   }
+// }
 function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
   const R = 6371; // Earth's radius in kilometers
   const dLat = (lat2 - lat1) * Math.PI / 180;
@@ -937,14 +937,14 @@ function extractLocation(location: any): { lat: number; lng: number } | null {
 
 // Helper function to format a drop response
 // Define types for formatDrop function
-type SharedWithItem = {
-  friend?: {
-    id: string;
-    name: string;
-    profile_image_url: string | null;
-  };
-  createdAt: Date;
-};
+// type SharedWithItem = {
+//   friend?: {
+//     id: string;
+//     name: string;
+//     profile_image_url: string | null;
+//   };
+//   createdAt: Date;
+// };
 // Get drop by id
 router.get('/:id', authenticateUser, async (req: Request, res: Response): Promise<void> => {
   try {
@@ -1010,7 +1010,7 @@ router.get('/:id', authenticateUser, async (req: Request, res: Response): Promis
     res.status(500).json({ message: 'Server error' });
   }
 });
-function formatDrop(drop: any, isLocked: boolean, userId?: string) {
+function formatDrop(drop: any, _isLocked: boolean, userId?: string) {
   // Determine ownership and sharing
   const isOwner = drop.userId === userId;
   // Find sharedDrop for this user if available

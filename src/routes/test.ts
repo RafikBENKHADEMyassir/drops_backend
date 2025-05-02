@@ -1,7 +1,7 @@
 import express from 'express';
 import { Request, Response } from 'express';
 // import { authenticateUser } from "../middleware/authMiddleware";
-import emailService from '../services/emailService';
+// import emailService from '../services/emailService';
 import notificationService from '../services/notificationService';
 
 const router = express.Router();
@@ -17,7 +17,7 @@ router.get('/send-test-message', async (req: Request, res: Response): Promise<vo
   try {
     // Hardcoded test data
     const senderId = '3a8dc6e9-ed89-4c7c-a029-cc2d0edc4353';
-    const receiverId = '59e572f2-2dbb-4e74-8a1e-0af47986ab7d';
+    // const receiverId = '59e572f2-2dbb-4e74-8a1e-0af47986ab7d';
     const conversationId = '71cee3d1-25ae-4854-9013-c7902b5b0df5';
     const content = 'test';
 
