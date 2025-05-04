@@ -1,5 +1,6 @@
 import { PrismaClient } from '@prisma/client';
 import { v4 as uuidv4 } from 'uuid';
+import notificationService from './notificationService';
 
 const prisma = new PrismaClient();
 
@@ -322,7 +323,27 @@ export default class ChatService {
         where: { id: conversationId },
         data: { updatedAt: new Date() }
       });
-
+      const participants = await prisma.participant.findMany({
+        where: { conversationId },
+        select: { userId: true }
+      });
+      const recipientIds = participants.map(p => p.userId !== senderId ? p.userId : null).filter(id => id !== null) as string[];
+      console.log('Recipient IDs:', recipientIds);
+        try {
+         notificationService.sendMessageNotification({
+          senderId: senderId,
+          conversationId,
+          recipients: recipientIds,
+          senderName: message.sender.name || `${message.sender.firstName || ''} ${message.sender.lastName || ''}`.trim(),
+          senderAvatar: message.sender.profile_image_url || undefined,
+          content,
+          attachmentUrl: attachment?.url,
+          messageId: message.id
+        });
+      }
+      catch (error) {
+        console.error('Error sending notification:', error);
+      }
       // Format the response
       return {
         id: message.id,

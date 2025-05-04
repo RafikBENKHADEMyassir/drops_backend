@@ -250,8 +250,8 @@ class NotificationService {
     } = params;
   
     // Don't notify the sender
-    const recipientsToNotify = recipients//.filter(id => id !== senderId);
-  console.log('Recipients to notify:', senderAvatar);
+    const recipientsToNotify = recipients.filter(id => id !== senderId);
+  console.log('Recipients to notify:', recipientsToNotify);
     // Truncate message content if too long
     let contentPreview = content;
     if (contentPreview.length > 100) {
@@ -259,6 +259,8 @@ class NotificationService {
     }
   
     for (const recipientId of recipientsToNotify) {
+      console.log('Recipient notification:', conversationId,messageId,senderId);
+
       await this.sendToUser(
         recipientId,
         {
