@@ -620,12 +620,26 @@ router.post('/:id/unlock', authenticateUser, async (req: Request, res: Response)
 router.get('/nearby', authenticateUser, async (req: Request, res: Response): Promise<void> => {
   try {
     const userId = req.user?.userId;
-console.log('User ID:', userId);
-    // Fetch all drops in the system
+
+    // Only fetch drops that are owned by the user or shared with them
     const allDrops = await prisma.drop.findMany({
+      where: {
+        OR: [
+          // User's own drops
+          { userId: userId },
+          
+          // Drops shared with the user
+          {
+            sharedWith: {
+              some: {
+                friendId: userId
+              }
+            }
+          }
+        ]
+      },
       include: {
         sharedWith: true,
-
         user: {
           select: {
             id: true,
@@ -646,6 +660,7 @@ console.log('User ID:', userId);
         dropId: { in: allDrops.map(d => d.id) }
       }
     });
+    
     // Format drops according to your rules
     const formattedDrops = allDrops.map(drop => {
       // 1. If mine, unlocked
@@ -671,26 +686,26 @@ console.log('User ID:', userId);
               sharedAt: share.createdAt,
             })),
             isUnlocked: true,
-            islocked: false,
+            isLocked: false,
             isOwner: true
           },
         };
       }
-      // 2. If shared with me, unlocked
+      // 2. If shared with me
       const shared = myShared.find(s => s.dropId === drop.id);
       if (shared) {
-        console.log('Shared with me:', shared.id, shared.isLocked,shared.dropId,shared.friendId,userId);
+        console.log('Shared with me:', shared.id, shared.isLocked, shared.dropId, shared.friendId, userId);
         return {
           id: drop.id,
           title: drop.title,
-          description:  drop.content,
+          description:drop.content,
           createdAt: drop.createdAt.toISOString(),
           type: drop.type.toLowerCase(),
           creatorId: drop.userId,
           sharedWithUserIds: drop.sharedWith.map(share => share.friendId),
-          imageUrl:  drop.content.startsWith('/uploads/') ? drop.content : null,
+          imageUrl: (drop.content.startsWith('/uploads/') ? drop.content : null),
           metadata: {
-            location: drop.location,
+            location:drop.location,
             creator: {
               id: drop.user.id,
               name: drop.user.name,
@@ -707,33 +722,9 @@ console.log('User ID:', userId);
         };
       }
 
-      // 3. All others are locked
-      return {
-        id: drop.id,
-        title: drop.title,
-        description: null,
-        createdAt: drop.createdAt.toISOString(),
-        type: drop.type.toLowerCase(),
-        creatorId: drop.userId,
-        sharedWithUserIds: drop.sharedWith.map(share => share.friendId),
-        imageUrl: drop.content.startsWith('/uploads/') ? drop.content : null,
-        metadata: {
-          location: drop.location,
-          creator: {
-            id: drop.user.id,
-            name: drop.user.name,
-            profile_image_url: drop.user.profile_image_url,
-          },
-          sharedWith: drop.sharedWith.map(share => ({
-            id: share.friendId,
-            sharedAt: share.createdAt,
-          })),
-          isUnlocked: false,
-          isLocked: true,
-          isOwner: false
-        },
-      };
-    });
+      // This shouldn't happen with the updated query, but included for safety
+      return null;
+    }).filter(drop => drop !== null);
 
     res.json(formattedDrops);
   } catch (error) {
