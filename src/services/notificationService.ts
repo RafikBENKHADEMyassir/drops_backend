@@ -194,7 +194,6 @@ class NotificationService {
     senderId: string,
     recipientId: string
   ): Promise<void> {
-    // Get sender details
     const sender = await prisma.user.findUnique({
       where: { id: senderId },
       select: {
@@ -207,13 +206,13 @@ class NotificationService {
     if (!sender) return;
     
     const senderName = sender.name || sender.firstName || 'Someone';
-    
+    console.log('Sender name:', sender.profile_image_url);
     await this.sendToUser(
       recipientId,
       {
         title: 'New Friend Request',
         body: `${senderName} sent you a friend request`,
-        imageUrl: sender.profile_image_url || undefined,
+        // imageUrl: sender.profile_image_url || undefined,
         data: {
           requestId,
           senderId
@@ -293,7 +292,7 @@ async sendDropSharedNotification(
       select: {
         name: true,
         firstName: true,
-        profile_image_url: true
+        // profile_image_url: true
       }
     });
     
@@ -306,7 +305,7 @@ async sendDropSharedNotification(
       {
         title: `${senderName} shared a Drop with you`,
         body: `${dropTitle} - Find it nearby to unlock!`,
-        imageUrl: sender.profile_image_url || undefined,
+        // imageUrl: sender.profile_image_url || undefined,
         data: {
           dropId,
           senderId,
