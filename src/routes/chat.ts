@@ -34,4 +34,8 @@ router.delete('/messages/:id', chatController.deleteMessage.bind(chatController)
 
 router.post('/conversations/:id/messages/read', chatController.markAsRead.bind(chatController));
 
+router.delete('/conversations/:conversationId/messages/:messageId', chatController.deleteMessage.bind(chatController));
+
+router.delete('/conversations/:conversationId', chatController.deleteConversation.bind(chatController));
+
 export default router;

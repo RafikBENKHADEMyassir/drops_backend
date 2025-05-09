@@ -1,6 +1,7 @@
 import { PrismaClient } from '@prisma/client';
 import { v4 as uuidv4 } from 'uuid';
 import notificationService from './notificationService';
+import bcrypt from 'bcrypt';
 
 const prisma = new PrismaClient();
 
@@ -16,6 +17,7 @@ export default class ChatService {
             }
           }
         },
+        
         include: {
           participants: {
             include: {
@@ -665,7 +667,7 @@ export default class ChatService {
   }
 
   // Delete a message
-  async deleteMessage(messageId: string, userId: string, forEveryone: boolean = false) {
+  async deleteMessage1(messageId: string, userId: string, forEveryone: boolean = false) {
     try {
       // Get the message
       const message = await prisma.message.findUnique({
@@ -724,4 +726,195 @@ export default class ChatService {
       throw error;
     }
   }
+  // Update the deleteMessage method in ChatService
+
+async deleteMessage(messageId: string, userId: string, forEveryone: boolean = false) {
+  try {
+    // Get the message
+    const message = await prisma.message.findUnique({
+      where: {
+        id: messageId
+      },
+      include: {
+        conversation: {
+          include: {
+            participants: true
+          }
+        }
+      }
+    });
+
+    if (!message) {
+      throw new Error('Message not found');
+    }
+
+    // Check if the user is the sender
+    if (forEveryone && message.senderId !== userId) {
+      throw new Error('You can only delete your own messages for everyone');
+    }
+
+    // Check if the user is a participant
+    const isParticipant = message.conversation.participants.some(p => p.userId === userId);
+    if (!isParticipant) {
+      throw new Error('You are not a member of this conversation');
+    }
+
+    if (forEveryone) {
+      console.log('Deleting message for everyone:', messageId);
+      // Update the message to mark it as deleted and replace content
+      await prisma.message.update({
+        where: {
+          id: messageId
+        },
+        data: {
+          content: "deleted_message",
+          isDeleted: true,
+          attachmentUrl: null, // Remove any attachment
+          attachmentType: null,
+          data: {}, // Remove any additional data
+        }
+      });
+    } else {
+      // For "delete for me", we just remove the message from the user's view
+      await prisma.messageRead.create({
+        data: {
+          messageId,
+          userId,
+          // isDeleted: true // Add this field to your schema if needed
+        }
+      });
+    }
+
+    return true;
+  } catch (error) {
+    console.error('Error deleting message:', error);
+    throw error;
+  }
+}
+
+// Add this method to your ChatService class
+
+// Delete a conversation for a specific user
+// Update the deleteConversation method:
+
+async deleteConversation(conversationId: string, userId: string) {
+  try {
+    // Check if the user is a participant
+    const participant = await prisma.participant.findUnique({
+      where: {
+        userId_conversationId: {
+          userId,
+          conversationId
+        }
+      }
+    });
+
+    if (!participant) {
+      throw new Error('You are not a member of this conversation');
+    }
+
+    // Get conversation with participants
+    const conversation = await prisma.conversation.findUnique({
+      where: { id: conversationId },
+      include: {
+        participants: true,
+        messages: {
+          where: { senderId: userId }
+        }
+      }
+    });
+
+    if (!conversation) {
+      throw new Error('Conversation not found');
+    }
+
+    // Delete messages sent by the user (replace content with "deleted message")
+    await prisma.message.updateMany({
+      where: {
+        conversationId,
+        senderId: userId
+      },
+      data: {
+        content: "(deleted message)",
+        isDeleted: true,
+        attachmentUrl: null,
+        attachmentType: null
+      }
+    });
+
+    // Create a system account if it doesn't exist
+    let systemUser = await prisma.user.findUnique({
+      where: { email: 'system@app.com' }
+    });
+
+    if (!systemUser) {
+      systemUser = await prisma.user.create({
+        data: {
+          id: uuidv4(),
+          email: 'system@app.com',
+          name: 'User',
+          password: await bcrypt.hash(uuidv4(), 10),
+        }
+      });
+    }
+
+    // Check if system user is already in the conversation
+    const systemParticipant = await prisma.participant.findUnique({
+      where: {
+        userId_conversationId: {
+          userId: systemUser.id,
+          conversationId
+        }
+      }
+    });
+
+    // Count total participants
+    const participantCount = conversation.participants.length;
+
+    // If system user exists and there are only 2 participants (the user + system user)
+    // This means both real users have deleted the conversation
+    if (systemParticipant && participantCount === 2) {
+      // Delete the entire conversation as both users have deleted it
+      await prisma.conversation.delete({
+        where: { id: conversationId }
+      });
+      
+      console.log(`Conversation ${conversationId} completely deleted as both users deleted it`);
+      return true;
+    }
+
+    // Otherwise, just delete the current user's participation
+    await prisma.participant.delete({
+      where: {
+        userId_conversationId: {
+          userId,
+          conversationId
+        }
+      }
+    });
+
+    // Track that this user has deleted the conversation
+    await prisma.deletedConversation.upsert({
+      where: {
+        userId_conversationId: {
+          userId,
+          conversationId
+        }
+      },
+      update: {
+        deletedAt: new Date()
+      },
+      create: {
+        userId,
+        conversationId,
+        deletedAt: new Date()
+      }
+    });
+
+    return true;
+  } catch (error) {
+    console.error('Error deleting conversation:', error);
+    throw error;
+  }
+}
 }

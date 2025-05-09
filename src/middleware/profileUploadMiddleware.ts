@@ -1,6 +1,21 @@
 import multer from 'multer';
 import path from 'path';
 import { Request, Response } from 'express';
+import sharp from 'sharp';
+import fs from 'fs';
+import { promisify } from 'util';
+
+const mkdir = promisify(fs.mkdir);
+const exists = promisify(fs.exists);
+
+// Ensure thumbnail directory exists
+const ensureThumbnailDir = async () => {
+  const thumbsDir = 'uploads/profiles/thumbs';
+  if (!(await exists(thumbsDir))) {
+    await mkdir(thumbsDir, { recursive: true });
+  }
+  return thumbsDir;
+};
 
 const storage = multer.diskStorage({
   destination: (_req, _file, cb) => {
@@ -16,6 +31,7 @@ const storage = multer.diskStorage({
 
 // Improved image file filter with more flexible MIME type checking
 const imageFileFilter = (_req: Request, file: Express.Multer.File, cb: multer.FileFilterCallback) => {
+  // Same as before...
   console.log('Incoming file details:', {
     fieldname: file.fieldname,
     originalname: file.originalname,
@@ -57,10 +73,23 @@ export const profileUpload = multer({
   },
 }).single('profileImage');
 
+// Helper function to generate thumbnail
+const generateThumbnail = async (filePath: string, filename: string): Promise<string> => {
+  const thumbsDir = await ensureThumbnailDir();
+  const thumbnailPath = path.join(thumbsDir, filename);
+  
+  await sharp(filePath)
+    .resize(150, 150, { fit: 'cover' })
+    .jpeg({ quality: 80 })
+    .toFile(thumbnailPath);
+  
+  return path.join('uploads/profiles/thumbs', filename);
+};
+
 // Helper function to handle multer upload with proper error handling
-export const handleProfileUpload = (req: Request, res: Response): Promise<void> => {
+export const handleProfileUpload = (req: Request, res: Response): Promise<{ filePath?: string, thumbnailPath?: string }> => {
   return new Promise((resolve, reject) => {
-    profileUpload(req, res, (err) => {
+    profileUpload(req, res, async (err) => {
       if (err instanceof multer.MulterError) {
         // Multer-specific errors
         if (err.code === 'LIMIT_FILE_SIZE') {
@@ -72,7 +101,32 @@ export const handleProfileUpload = (req: Request, res: Response): Promise<void> 
         // Other errors
         reject(err);
       } else {
-        resolve();
+        try {
+          // If file was uploaded successfully, generate thumbnail
+          if (req.file) {
+            const filePath = req.file.path;
+            const filename = path.basename(filePath);
+            const thumbnailPath = await generateThumbnail(filePath, filename);
+            
+            resolve({ 
+              filePath: `/uploads/profiles/${filename}`,
+              thumbnailPath: `/uploads/profiles/thumbs/${filename}`
+            });
+          } else {
+            resolve({});
+          }
+        } catch (thumbError) {
+          console.error('Error generating thumbnail:', thumbError);
+          // Still resolve with the original file even if thumbnail generation fails
+          if (req.file) {
+            const filename = path.basename(req.file.path);
+            resolve({ 
+              filePath: `/uploads/profiles/${filename}`
+            });
+          } else {
+            resolve({});
+          }
+        }
       }
     });
   });

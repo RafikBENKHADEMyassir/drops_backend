@@ -271,30 +271,73 @@ export default class ChatController {
     }
   }
 
-  // Delete a message
-  async deleteMessage(req: Request, res: Response) {
-    try {
-      const userId = req.user?.userId;
-        if (!userId) {
-            res.status(401).json({
-            success: false,
-            message: 'Unauthorized'
-            });
-        }
-      const { id } = req.params;
-      const forEveryone = req.query.forEveryone === 'true';
-      
-      await chatService.deleteMessage(id, userId!, forEveryone);
-      
-      res.status(200).json({
-        success: true
-      });
-    } catch (error) {
-      console.error('Error in deleteMessage:', error);
-      res.status(error instanceof Error && (error.message.includes('not a member') || error.message.includes('only delete your own')) ? 403 : 500).json({
+// Update the deleteMessage method in ChatController
+
+async deleteMessage(req: Request, res: Response) {
+  try {
+    const userId = req.user?.userId;
+    if (!userId) {
+      return res.status(401).json({
         success: false,
-        message: error instanceof Error ? error.message : 'Failed to delete message'
+        message: 'Unauthorized'
       });
     }
+    
+    const { conversationId, messageId } = req.params;
+    const forEveryone = true; // Always delete for everyone with this endpoint
+    
+    await chatService.deleteMessage(messageId, userId, forEveryone);
+    
+    // Notify other participants through socket.io if available
+    const io = req.app.get('io');
+    if (io) {
+      io.to(`conversation:${conversationId}`).emit('message_deleted', {
+        messageId,
+        conversationId
+      });
+    }
+    
+  return  res.status(200).json({
+      success: true
+    });
+  } catch (error) {
+    console.error('Error in deleteMessage:', error);
+   return  res.status(error instanceof Error && 
+      (error.message.includes('not a member') || 
+       error.message.includes('only delete your own')) ? 403 : 500).json({
+      success: false,
+      message: error instanceof Error ? error.message : 'Failed to delete message'
+    });
   }
+}
+
+async deleteConversation(req: Request, res: Response) {
+  try {
+    const userId = req.user?.userId;
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        message: 'Unauthorized'
+      });
+    }
+    
+    const { conversationId } = req.params;
+    
+    await chatService.deleteConversation(conversationId, userId);
+    
+    return res.status(200).json({
+      success: true,
+      message: 'Conversation deleted successfully'
+    });
+  } catch (error) {
+    console.error('Error in deleteConversation:', error);
+    return res.status(error instanceof Error && error.message.includes('not a member') ? 403 : 500).json({
+      success: false,
+      message: error instanceof Error ? error.message : 'Failed to delete conversation'
+    });
+  }
+}
+
+
+
 }

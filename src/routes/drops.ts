@@ -138,7 +138,7 @@ router.post('/',  [authenticateUser, dropUpload,
               data: {
                 dropId: newDrop.id,
                 dropType: type,
-                dropTitle: title
+                dropTitle: title,
               }
             }
           });
