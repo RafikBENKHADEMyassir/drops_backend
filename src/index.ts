@@ -17,6 +17,8 @@ import orderRoutes from './routes/order.routes';
 import mediaUploadRoutes from './routes/media-upload.routes';
 import notificationRoutes from './routes/notification';  
 import testRoutes from './routes/test';
+import languagesRoutes from './routes/languages';
+
 dotenv.config();
 const app = express();
 
@@ -54,7 +56,7 @@ app.use('/api/orders/webhook', express.raw({ type: 'application/json' }));
 // app.use('/uploads', express.static('uploads'));
 app.use('/api/upload', mediaUploadRoutes);
 app.use('/api/notifications',notificationRoutes);
-// 
+app.use('/api/languages', languagesRoutes);
 // Health Check
 app.get('/', (_req, res) => {
   const currentDate = new Date('2025-04-16T17:37:38Z');  // Based on provided date

@@ -106,8 +106,7 @@ export const handleProfileUpload = (req: Request, res: Response): Promise<{ file
           if (req.file) {
             const filePath = req.file.path;
             const filename = path.basename(filePath);
-            const thumbnailPath = await generateThumbnail(filePath, filename);
-            
+             await generateThumbnail(filePath, filename);
             resolve({ 
               filePath: `/uploads/profiles/${filename}`,
               thumbnailPath: `/uploads/profiles/thumbs/${filename}`
