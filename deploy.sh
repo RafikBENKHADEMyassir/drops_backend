@@ -32,9 +32,13 @@ gh auth login
 # Clone the repository using GitHub CLI
 gh repo clone RafikBENKHADEMyassir/drops_backend .
 
-# Create uploads directories
+# Create uploads and public directories
 mkdir -p uploads/profiles
-chmod 755 uploads uploads/profiles
+mkdir -p public
+chmod 755 uploads uploads/profiles public
+
+# Copy the coming soon page to public directory
+cp public/index.html /var/www/drops-backend/public/
 
 # Install dependencies
 npm install
@@ -53,3 +57,7 @@ pm2 start ecosystem.config.js
 # Save PM2 process list and configure to start on system startup
 pm2 save
 pm2 startup
+
+# Setup HTTPS with Let's Encrypt
+echo "Setting up HTTPS..."
+bash setup-https.sh
