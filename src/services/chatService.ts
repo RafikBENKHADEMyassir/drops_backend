@@ -9,6 +9,7 @@ export default class ChatService {
   // Get all conversations for a user
   async getConversations(userId: string) {
     try {
+      // Get conversations with just the most recent message
       const conversations = await prisma.conversation.findMany({
         where: {
           participants: {
@@ -17,7 +18,6 @@ export default class ChatService {
             }
           }
         },
-        
         include: {
           participants: {
             include: {
@@ -49,18 +49,38 @@ export default class ChatService {
               readBy: true
             }
           }
-        },
-        orderBy: {
-          updatedAt: 'desc'
         }
       });
 
-      return conversations.map(conversation => {
-        // Calculate unread messages count for this user
-        const unreadCount = conversation.messages.filter(message => {
-          return message.senderId !== userId && 
-                 !message.readBy.some(read => read.userId === userId);
-        }).length;
+      // Get unread counts in a separate query
+      const unreadCounts = await Promise.all(
+        conversations.map(async conversation => {
+          const count = await prisma.message.count({
+            where: {
+              conversationId: conversation.id,
+              senderId: { not: userId },
+              readBy: {
+                none: {
+                  userId: userId
+                }
+              }
+            }
+          });
+          return { conversationId: conversation.id, count };
+        })
+      );
+
+      // Create a map for quick lookup
+      const unreadCountMap = new Map(
+        unreadCounts.map(item => [item.conversationId, item.count])
+      );
+
+      // Process and sort conversations
+      const processedConversations = conversations.map(conversation => {
+        const unreadCount = unreadCountMap.get(conversation.id) || 0;
+        const lastMessageTimestamp = conversation.messages.length > 0 
+          ? conversation.messages[0].createdAt 
+          : conversation.updatedAt;
 
         return {
           id: conversation.id,
@@ -81,11 +101,17 @@ export default class ChatService {
             timestamp: conversation.messages[0].createdAt,
             status: conversation.messages[0].status
           } : null,
-          unreadCount: conversation.messages.length > 0 ? unreadCount :null,
+          unreadCount: unreadCount,
           createdAt: conversation.createdAt,
-          updatedAt: conversation.updatedAt
+          updatedAt: conversation.updatedAt,
+          lastActivity: lastMessageTimestamp
         };
       });
+
+      // Sort by the timestamp of the most recent message
+      return processedConversations.sort((a, b) => 
+        b.lastActivity.getTime() - a.lastActivity.getTime()
+      );
     } catch (error) {
       console.error('Error fetching conversations:', error);
       throw new Error('Failed to fetch conversations');
