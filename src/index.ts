@@ -38,7 +38,9 @@ const apiLimiter = rateLimit({
 
 // Security middleware
 app.use(cors());
-app.use(helmet());
+app.use(helmet({
+  contentSecurityPolicy: false, // Disable CSP for simplicity during development
+}));
 app.use(morgan('dev'));
 app.use(express.json({ limit: '200mb' }));  // Increase from 10mb
 app.use(express.urlencoded({ extended: true, limit: '200mb' }));
@@ -74,6 +76,18 @@ app.get('/api/health', (_req, res) => {
   res.status(200).json({ status: 'ok4' });
 });
 app.use('/api/test', testRoutes);
+
+// Make sure API routes are defined before this catch-all route
+// This will serve index.html for non-API routes to support the coming soon page
+app.get('*', (req, res, next) => {
+  // Skip if the request starts with /api
+  if (req.path.startsWith('/api')) {
+    return next();
+  }
+  
+  res.sendFile(path.join(__dirname, '../public/index.html'));
+});
+
 // Make io available to the app
 app.set('io', io);
 
