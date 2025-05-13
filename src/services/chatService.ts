@@ -75,12 +75,38 @@ export default class ChatService {
         unreadCounts.map(item => [item.conversationId, item.count])
       );
 
-      // Process and sort conversations
+      // Process conversations
       const processedConversations = conversations.map(conversation => {
         const unreadCount = unreadCountMap.get(conversation.id) || 0;
         const lastMessageTimestamp = conversation.messages.length > 0 
           ? conversation.messages[0].createdAt 
           : conversation.updatedAt;
+
+        // IMPORTANT: Create a lastMessage object even if there are no messages
+        // This ensures the Flutter app doesn't try to cast null to Map<String, dynamic>
+        let lastMessageObj = null;
+        if (conversation.messages.length > 0) {
+          lastMessageObj = {
+            id: conversation.messages[0].id,
+            content: conversation.messages[0].content,
+            senderId: conversation.messages[0].senderId,
+            senderName: conversation.messages[0].sender.name || 
+                      `${conversation.messages[0].sender.firstName || ''} ${conversation.messages[0].sender.lastName || ''}`.trim(),
+            timestamp: conversation.messages[0].createdAt,
+            status: conversation.messages[0].status
+          };
+        } else {
+          // Provide an empty lastMessage structure that won't break the app
+          // This matches what Flutter expects but with empty/default values
+          lastMessageObj = {
+            id: "",
+            content: "",
+            senderId: "",
+            senderName: "",
+            timestamp: conversation.updatedAt,
+            status: "sent"
+          };
+        }
 
         return {
           id: conversation.id,
@@ -88,19 +114,11 @@ export default class ChatService {
           participants: conversation.participants.map(participant => ({
             id: participant.user.id,
             displayName: participant.user.name || 
-                        `${participant.user.firstName || ''} ${participant.user.lastName || ''}`.trim(),
+                      `${participant.user.firstName || ''} ${participant.user.lastName || ''}`.trim(),
             avatarUrl: participant.user.profile_image_url,
             isAdmin: participant.isAdmin
           })),
-          lastMessage: conversation.messages.length > 0 ? {
-            id: conversation.messages[0].id,
-            content: conversation.messages[0].content,
-            senderId: conversation.messages[0].senderId,
-            senderName: conversation.messages[0].sender.name || 
-                        `${conversation.messages[0].sender.firstName || ''} ${conversation.messages[0].sender.lastName || ''}`.trim(),
-            timestamp: conversation.messages[0].createdAt,
-            status: conversation.messages[0].status
-          } : null,
+          lastMessage: lastMessageObj, // Never null, always an object with expected structure
           unreadCount: unreadCount,
           createdAt: conversation.createdAt,
           updatedAt: conversation.updatedAt,
