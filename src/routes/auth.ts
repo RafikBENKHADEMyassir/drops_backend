@@ -587,8 +587,8 @@ router.post('/complete-profile', authenticateUser, async (req: Request, res: Res
 // Add update profile endpoint without image
 router.put('/profile', authenticateUser, async (req: Request, res: Response): Promise<void> => {
   try {
-    const { firstName, lastName, email, name } = req.body;
-    
+    const { firstName, lastName, email, name, phone } = req.body;
+
     // Validate required fields
     if (!name) {
       res.status(400).json({ 
@@ -598,6 +598,34 @@ router.put('/profile', authenticateUser, async (req: Request, res: Response): Pr
       return;
     }
 
+    // Check if email is used by another user
+    if (email) {
+      const emailExists = await prisma.user.findFirst({
+        where: {
+          email,
+          id: { not: req.user?.userId }
+        }
+      });
+      if (emailExists) {
+        res.status(400).json({ message: 'Email already in use', success: false });
+        return;
+      }
+    }
+
+    // Check if phone is used by another user
+    if (phone) {
+      const phoneExists = await prisma.user.findFirst({
+        where: {
+          phone,
+          id: { not: req.user?.userId }
+        }
+      });
+      if (phoneExists) {
+        res.status(400).json({ message: 'Phone already in use', success: false });
+        return;
+      }
+    }
+
     const updateData: any = {
       name,
       updatedAt: new Date(),
@@ -605,9 +633,10 @@ router.put('/profile', authenticateUser, async (req: Request, res: Response): Pr
 
     // Add optional fields if provided
     if (email) updateData.email = email;
-    // if (phone) updateData.phone = phone;
-    if(firstName) updateData.firstName = firstName;
-    if(lastName) updateData.lastName = lastName;
+    if (phone) updateData.phone = phone;
+    if (firstName) updateData.firstName = firstName;
+    if (lastName) updateData.lastName = lastName;
+
     // Update user profile
     const updatedUser = await prisma.user.update({
       where: { id: req.user?.userId },
