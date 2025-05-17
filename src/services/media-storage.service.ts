@@ -60,9 +60,9 @@ const upload = multer({
     const allowedMimeTypes = [
       'image/jpeg', 'image/png', 'image/gif',
       'video/mp4', 'video/quicktime',
-      'audio/mpeg', 'audio/mp3', 'audio/wav'
+      'audio/mpeg', 'audio/mp3', 'audio/wav','application/octet-stream'
     ];
-    
+    console.log('xxx Incoming file details:', file.mimetype);
     if (allowedMimeTypes.includes(file.mimetype)) {
       cb(null, true);
     } else {

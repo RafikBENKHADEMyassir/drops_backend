@@ -111,6 +111,7 @@ export default class ChatService {
         return {
           id: conversation.id,
           name: conversation.name,
+          avatarUrl: conversation.avatarUrl || undefined, 
           participants: conversation.participants.map(participant => ({
             id: participant.user.id,
             displayName: participant.user.name || 
@@ -413,7 +414,7 @@ export default class ChatService {
   }
 
   // Create a new conversation
-  async createConversation(creatorId: string, participantIds: string[], name?: string) {
+  async createConversation(creatorId: string, participantIds: string[], name?: string,avatarUrl?: string) {
     try {
       // Ensure the creator is included in participants
       if (!participantIds.includes(creatorId)) {
@@ -561,6 +562,7 @@ export default class ChatService {
         data: {
           id: uuidv4(),
           name,
+          avatarUrl,
           participants: {
             create: participantIds.map(userId => ({
               userId,

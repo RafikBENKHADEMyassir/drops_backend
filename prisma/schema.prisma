@@ -108,6 +108,7 @@ model Conversation {
   name          String?   // For group chats
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
+  avatarUrl   String?
   
   // Relations
   participants  Participant[]

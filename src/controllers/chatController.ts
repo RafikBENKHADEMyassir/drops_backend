@@ -4,7 +4,7 @@ import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
 import { v4 as uuidv4 } from 'uuid';
-
+import mediaStorageService from '../services/media-storage.service';
 // Configure multer for file uploads
 const storage = multer.diskStorage({
   destination: function (_req, _file, cb) {
@@ -182,7 +182,16 @@ export default class ChatController {
   // Create a new conversation
   async createConversation(req: Request, res: Response) {
     // Use multer to handle file uploads for group images
-    upload.single('groupImage')(req, res, async (err) => {
+    // upload.single('groupImage')(req, res, async (err) => {
+    //   if (err) {
+    //     console.error('Error uploading file:', err);
+    //     return res.status(400).json({
+    //       success: false,
+    //       message: err.message || 'File upload error'
+    //     });
+    //   }
+       const upload = mediaStorageService.getUploadMiddleware();
+       upload(req, res, async (err) => {
       if (err) {
         console.error('Error uploading file:', err);
         return res.status(400).json({
@@ -190,44 +199,89 @@ export default class ChatController {
           message: err.message || 'File upload error'
         });
       }
-      
+
       try {
         const userId = req.user?.userId;
         if (!userId) {
-          return res.status(401).json({  // Added return here
+          return res.status(401).json({
             success: false,
             message: 'Unauthorized'
           });
         }
         const { participantIds, name } = req.body;
-        
-        // Parse participant IDs if they come as a string
-        const parsedParticipantIds = Array.isArray(participantIds) 
-          ? participantIds 
+        const parsedParticipantIds = Array.isArray(participantIds)
+          ? participantIds
           : participantIds.split(',').map((id: string) => id.trim());
-        
-        // Create the conversation
+
+        let avatarUrl: string | undefined = undefined;
+        if (req.file) {
+          avatarUrl = `/media/images/${req.file.filename}`; // or the correct path based on your config
+        }
+
         const conversation = await chatService.createConversation(
           userId,
           parsedParticipantIds,
-          name
+          name,
+          avatarUrl
         );
-        
-        // If there's a group image uploaded, update the conversation (this would require additional logic)
-        // For simplicity, we're not handling group images in this example
-        
-        return res.status(201).json({  // Added return here
+
+        return res.status(201).json({
           success: true,
           conversation
         });
       } catch (error) {
         console.error('Error in createConversation:', error);
-        return res.status(500).json({  // Added return here
+        return res.status(500).json({
           success: false,
           message: error instanceof Error ? error.message : 'Failed to create conversation'
         });
       }
     });
+    //   try {
+    //     const userId = req.user?.userId;
+    //     if (!userId) {
+    //       return res.status(401).json({  // Added return here
+    //         success: false,
+    //         message: 'Unauthorized'
+    //       });
+    //     }
+    //     const { participantIds, name } = req.body;
+        
+    //     // Parse participant IDs if they come as a string
+    //     const parsedParticipantIds = Array.isArray(participantIds) 
+    //       ? participantIds 
+    //       : participantIds.split(',').map((id: string) => id.trim());
+        
+    //     // Get the image path if uploaded
+    //     let avatarUrl: string | undefined = undefined;
+    //     if (req.file) {
+    //         console.log('File uploaded:', req.file);
+
+    //       avatarUrl = `/uploads/chat/${req.file.filename}`; // Or the path where you save images
+    //     }
+    //     // Create the conversation
+    //     const conversation = await chatService.createConversation(
+    //       userId,
+    //       parsedParticipantIds,
+    //       name,
+    //       avatarUrl
+    //     );
+        
+    //     // If there's a group image uploaded, update the conversation (this would require additional logic)
+    //     // For simplicity, we're not handling group images in this example
+        
+    //     return res.status(201).json({  // Added return here
+    //       success: true,
+    //       conversation
+    //     });
+    //   } catch (error) {
+    //     console.error('Error in createConversation:', error);
+    //     return res.status(500).json({  // Added return here
+    //       success: false,
+    //       message: error instanceof Error ? error.message : 'Failed to create conversation'
+    //     });
+    //   }
+    // });
   }
 
   // Mark messages as read

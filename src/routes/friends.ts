@@ -197,74 +197,83 @@ router.get('/', authenticateUser, async (req: Request, res: Response) => {
   });
 
   // ✅ Send Friend Invite
-  router.post('/invite', authenticateUser, async (req: Request, res: Response): Promise<void> => {
-    const { recipientId } = req.body;
-  
-    if (!recipientId) {
-      console.error('Recipient ID is required',req.body);
-      res.status(400).json({ message: 'Recipient ID is required' });
+router.post('/invite', authenticateUser, async (req: Request, res: Response): Promise<void> => {
+  const { recipientId } = req.body;
+
+  if (!recipientId) {
+    console.error('Recipient ID is required', req.body);
+    res.status(400).json({ message: 'Recipient ID is required' });
+    return;
+  }
+
+  try {
+    // Check if the recipient exists
+    const recipient = await prisma.user.findUnique({
+      where: { id: recipientId },
+    });
+
+    if (!recipient) {
+      res.status(404).json({ message: 'Recipient not found' });
       return;
     }
-  
-    try {
-      // Check if the recipient exists
-      const recipient = await prisma.user.findUnique({
-        where: { id: recipientId },
-      });
-  
-      if (!recipient) {
-        res.status(404).json({ message: 'Recipient not found' });
-        return;
-      }
-  
-      // Check if a friend request already exists
-      const existingRequest = await prisma.friendRequest.findFirst({
-        where: {
-          senderId: req.user?.userId,
-          recipientId,
-        },
-      });
-  
-      if (existingRequest) {
-        res.status(400).json({ message: 'Friend request already sent' });
-        return;
-      }
-  
-      // Create the friend request
-      const friendRequest = await prisma.friendRequest.create({
-        data: {
-          senderId: req.user?.userId!,
-          recipientId,
-          status: 'pending',
-        },
-      });
-      // const sender = await prisma.user.findUnique({
-      //   where: { id: req.user?.userId! },
-      //   select: {
-      //     name: true,
-      //     firstName: true,
-      //     profile_image_url: true
-      //   }
-      // });
 
-      setTimeout(async () => {
-        try {
-          await notificationService.sendFriendRequestNotification(
-            friendRequest.id,
-            req.user?.userId!,
-            recipientId
-          );
-        } catch (notifError) {
-          console.error('Error sending friend request notification:', notifError);
-        }
-      }, 0);
+    // Check if a friend request already exists
+    const existingRequest = await prisma.friendRequest.findFirst({
+      where: {
+        senderId: req.user?.userId,
+        recipientId,
+      },
+    });
 
-      res.status(201).json({ message: 'Friend request sent', friendRequest });
-    } catch (error) {
-      console.error('Error sending friend invite:', error);
-      res.status(500).json({ message: 'Server error' });
+    if (existingRequest) {
+      res.status(400).json({ message: 'Friend request already sent' });
+      return;
     }
-  });
+
+    // Create the friend request
+    const friendRequest = await prisma.friendRequest.create({
+      data: {
+        senderId: req.user?.userId!,
+        recipientId,
+        status: 'pending',
+      },
+    });
+
+    // Create notification in DB
+    await prisma.notification.create({
+      data: {
+        userId: recipientId,
+        title: 'New Friend Request',
+        body: 'You have received a new friend request',
+        type: 'friendRequest',
+        data: {
+          requestId: friendRequest.id,
+          senderId: req.user?.userId!,
+        },
+        createdAt: new Date(),
+        // updatedAt: new Date(),
+      }
+    });
+
+    // Send push notification (async, don't block response)
+    setTimeout(async () => {
+      try {
+        await notificationService.sendFriendRequestNotification(
+          friendRequest.id,
+          req.user?.userId!,
+          recipientId
+        );
+      } catch (notifError) {
+        console.error('Error sending friend request notification:', notifError);
+      }
+    }, 0);
+
+    res.status(201).json({ message: 'Friend request sent', friendRequest });
+  } catch (error) {
+    console.error('Error sending friend invite:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
 
   // ✅ Block a User
 router.post('/block', authenticateUser, async (req: Request, res: Response): Promise<void> => {
@@ -472,4 +481,36 @@ router.post('/block', authenticateUser, async (req: Request, res: Response): Pro
       res.status(500).json({ message: 'Server error' });
     }
   });
+
+  // ✅ Delete a Friend (by friendId)
+router.delete('/:friendId', authenticateUser, async (req: Request, res: Response): Promise<void> => {
+  const { friendId } = req.params;
+
+  if (!friendId) {
+    res.status(400).json({ message: 'Friend ID is required' });
+    return;
+  }
+
+  try {
+    // Remove the friendship (both directions)
+    const deleteResult = await prisma.friend.deleteMany({
+      where: {
+        OR: [
+          { userId: req.user?.userId, friendId },
+          { userId: friendId, friendId: req.user?.userId },
+        ],
+      },
+    });
+
+    if (deleteResult.count === 0) {
+      res.status(404).json({ message: 'Friendship not found' }); 
+      return;
+    }
+
+    res.status(200).json({ message: 'Friend deleted successfully' });
+  } catch (error) {
+    console.error('Error deleting friend:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
   export default router;
